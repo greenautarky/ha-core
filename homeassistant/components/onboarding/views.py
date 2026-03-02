@@ -32,6 +32,8 @@ from .const import (
     DOMAIN,
     STEP_ANALYTICS,
     STEP_CORE_CONFIG,
+    STEP_CUSTOM_PAGES,
+    STEP_GDPR,
     STEP_INTEGRATION,
     STEP_USER,
     STEPS,
@@ -47,11 +49,10 @@ async def async_setup(
     await async_process_onboarding_platforms(hass)
     hass.http.register_view(OnboardingStatusView(data, store))
     hass.http.register_view(InstallationTypeOnboardingView(data))
+    hass.http.register_view(GdprOnboardingView(data, store))
     hass.http.register_view(UserOnboardingView(data, store))
-    hass.http.register_view(CoreConfigOnboardingView(data, store))
-    hass.http.register_view(IntegrationOnboardingView(data, store))
+    hass.http.register_view(CustomPagesOnboardingView(data, store))
     hass.http.register_view(AnalyticsOnboardingView(data, store))
-    hass.http.register_view(WaitIntegrationOnboardingView(data))
 
 
 class OnboardingPlatformProtocol(Protocol):
@@ -159,6 +160,43 @@ class _BaseOnboardingStepView(BaseOnboardingView):
                 listener()
 
 
+class GdprOnboardingView(_BaseOnboardingStepView):
+    """View to handle GDPR acceptance onboarding step."""
+
+    url = "/api/onboarding/gdpr"
+    name = "api:onboarding:gdpr"
+    requires_auth = False
+    step = STEP_GDPR
+
+    @RequestDataValidator(
+        vol.Schema(
+            {
+                vol.Required("accepted"): bool,
+            }
+        )
+    )
+    async def post(
+        self, request: web.Request, data: dict[str, bool]
+    ) -> web.Response:
+        """Handle GDPR acceptance."""
+        hass = request.app[KEY_HASS]
+
+        async with self._lock:
+            if self._async_is_done():
+                return self.json_message(
+                    "GDPR step already done", HTTPStatus.FORBIDDEN
+                )
+
+            if not data["accepted"]:
+                return self.json_message(
+                    "GDPR must be accepted to continue", HTTPStatus.BAD_REQUEST
+                )
+
+            await self._async_mark_done(hass)
+
+            return self.json({})
+
+
 class UserOnboardingView(_BaseOnboardingStepView):
     """View to handle create user onboarding step."""
 
@@ -207,8 +245,18 @@ class UserOnboardingView(_BaseOnboardingStepView):
 
             area_registry = ar.async_get(hass)
 
+            # Fallback names if translations are not available
+            _area_fallbacks = {
+                "living_room": "Living Room",
+                "kitchen": "Kitchen",
+                "bedroom": "Bedroom",
+            }
+
             for area in DEFAULT_AREAS:
-                name = translations[f"component.onboarding.area.{area}"]
+                name = translations.get(
+                    f"component.onboarding.area.{area}",
+                    _area_fallbacks.get(area, area.replace("_", " ").title()),
+                )
                 # Guard because area might have been created by an automatically
                 # set up integration.
                 if not area_registry.async_get_area_by_name(name):
@@ -340,6 +388,28 @@ class WaitIntegrationOnboardingView(NoAuthBaseOnboardingView):
         )
 
 
+class CustomPagesOnboardingView(_BaseOnboardingStepView):
+    """View to handle custom pages onboarding step."""
+
+    url = "/api/onboarding/custom_pages"
+    name = "api:onboarding:custom_pages"
+    step = STEP_CUSTOM_PAGES
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Handle finishing custom pages step."""
+        hass = request.app[KEY_HASS]
+
+        async with self._lock:
+            if self._async_is_done():
+                return self.json_message(
+                    "Custom pages step already done", HTTPStatus.FORBIDDEN
+                )
+
+            await self._async_mark_done(hass)
+
+            return self.json({})
+
+
 class AnalyticsOnboardingView(_BaseOnboardingStepView):
     """View to finish analytics onboarding step."""
 
@@ -358,6 +428,22 @@ class AnalyticsOnboardingView(_BaseOnboardingStepView):
                 )
 
             await self._async_mark_done(hass)
+
+            # Set up default integrations since we skip the core_config step
+            onboard_integrations = [
+                "google_translate",
+                "met",
+                "radio_browser",
+                "shopping_list",
+            ]
+
+            for domain in onboard_integrations:
+                hass.async_create_task(
+                    hass.config_entries.flow.async_init(
+                        domain, context={"source": "onboarding"}
+                    ),
+                    f"onboarding_setup_{domain}",
+                )
 
             return self.json({})
 

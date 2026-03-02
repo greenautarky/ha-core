@@ -6,5 +6,15 @@
   },
   "dashboard": {
     "map": { "title": "Map" }
+  },
+  "step": {
+    "gdpr": {
+      "title": "Data Privacy",
+      "description": "Please review and accept the data privacy policy to continue."
+    },
+    "custom_pages": {
+      "title": "Information",
+      "description": "Important information about your device."
+    }
   }
 }

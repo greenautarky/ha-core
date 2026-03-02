@@ -17,6 +17,8 @@ from .const import (
     DOMAIN,
     STEP_ANALYTICS,
     STEP_CORE_CONFIG,
+    STEP_CUSTOM_PAGES,
+    STEP_GDPR,
     STEP_INTEGRATION,
     STEP_USER,
     STEPS,
@@ -24,7 +26,7 @@ from .const import (
 from .views import BaseOnboardingView, NoAuthBaseOnboardingView  # noqa: F401
 
 STORAGE_KEY = DOMAIN
-STORAGE_VERSION = 4
+STORAGE_VERSION = 5
 
 CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
@@ -61,6 +63,14 @@ class OnboardingStorage(Store[OnboardingStoreData]):
             old_data["done"].append(STEP_CORE_CONFIG)
         if old_major_version < 4:
             old_data["done"].append(STEP_ANALYTICS)
+        if old_major_version < 5:
+            # Migration from stock HA to custom onboarding:
+            # Auto-mark removed steps as done, and new steps as done
+            # for existing installations that already completed onboarding.
+            if STEP_GDPR not in old_data["done"]:
+                old_data["done"].append(STEP_GDPR)
+            if STEP_CUSTOM_PAGES not in old_data["done"]:
+                old_data["done"].append(STEP_CUSTOM_PAGES)
         return old_data
 
 
