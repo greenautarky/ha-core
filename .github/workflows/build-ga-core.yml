@@ -14,7 +14,7 @@ on:
 env:
   IMAGE: ghcr.io/greenautarky/tinker-homeassistant
   BASE_IMAGE: ghcr.io/home-assistant/armv7-homeassistant-base:2025.10.1
-  FRONTEND_REPO: thomas-greenautarky/frontend
+  FRONTEND_REPO: greenautarky/frontend
   FRONTEND_BRANCH: ga/custom-onboarding
 
 jobs:
