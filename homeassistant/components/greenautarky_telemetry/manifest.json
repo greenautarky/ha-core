@@ -1,0 +1,9 @@
+{
+  "domain": "greenautarky_telemetry",
+  "name": "greenautarky Telemetry",
+  "codeowners": [],
+  "dependencies": ["websocket_api"],
+  "documentation": "",
+  "integration_type": "system",
+  "quality_scale": "internal"
+}
