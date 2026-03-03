@@ -4,6 +4,5 @@
   "codeowners": [],
   "dependencies": ["websocket_api"],
   "documentation": "",
-  "integration_type": "system",
-  "quality_scale": "internal"
+  "integration_type": "service"
 }

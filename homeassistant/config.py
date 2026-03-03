@@ -59,6 +59,9 @@ default_config:
 frontend:
   themes: !include_dir_merge_named themes
 
+# greenautarky telemetry preferences (WS API for onboarding)
+greenautarky_telemetry:
+
 automation: !include {AUTOMATION_CONFIG_PATH}
 script: !include {SCRIPT_CONFIG_PATH}
 scene: !include {SCENE_CONFIG_PATH}
