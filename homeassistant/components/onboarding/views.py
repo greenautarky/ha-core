@@ -11,7 +11,7 @@ from aiohttp import web
 from aiohttp.web_exceptions import HTTPUnauthorized
 import voluptuous as vol
 
-from homeassistant.auth.const import GROUP_ID_ADMIN
+from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
 from homeassistant.auth.providers.homeassistant import HassAuthProvider
 from homeassistant.components import person
 from homeassistant.components.auth import indieauth
@@ -227,8 +227,13 @@ class UserOnboardingView(_BaseOnboardingStepView):
             provider = _async_get_hass_provider(hass)
             await provider.async_initialize()
 
+            # If admin already exists (re-onboarding after reset), create as
+            # normal user. If first user (fresh install), create as admin.
+            users = await hass.auth.async_get_users()
+            has_existing_users = any(not u.system_generated for u in users)
             user = await hass.auth.async_create_user(
-                data["name"], group_ids=[GROUP_ID_ADMIN]
+                data["name"],
+                group_ids=[GROUP_ID_USER] if has_existing_users else [GROUP_ID_ADMIN],
             )
             await provider.async_add_auth(data["username"], data["password"])
             credentials = await provider.async_get_or_create_credentials(
