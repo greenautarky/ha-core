@@ -128,6 +128,9 @@ $SSH "docker tag \
 $SSH "ha core rebuild"
 
 # 4. (Optional) Reset onboarding to test from scratch
+#    ⚠ This deletes ALL user accounts and auth data!
+#    You will need to re-create the admin user (email + password)
+#    during the onboarding user-creation step.
 $SSH "docker exec homeassistant sh -c '\
   rm -f /config/.storage/onboarding \
         /config/.storage/auth \
@@ -135,6 +138,11 @@ $SSH "docker exec homeassistant sh -c '\
         /config/.storage/person'"
 $SSH "ha core restart"
 ```
+
+> **Important**: After a full reset, all user accounts are gone. The onboarding
+> will prompt you to create a new admin account (step 3). There is no way to
+> preserve existing login credentials across an onboarding reset — the admin
+> user and password must be re-created each time.
 
 ### Method B: Production (HAOS auto-pulls)
 
@@ -146,44 +154,6 @@ On a device flashed with greenautarky HAOS:
 4. User clicks "Update" in HA UI, or it auto-updates
 
 No retagging needed — the Supervisor natively resolves `ghcr.io/greenautarky/tinker-homeassistant`.
-
----
-
-## System-Generated Admin vs. User-Created Accounts
-
-HA creates several `system_generated` users at startup (e.g. `homeassistant`, `hassio`). These are internal service accounts, not real logins.
-
-The onboarding user-step check (`__init__.py` line 127) **skips** system-generated owners:
-
-```python
-if user.is_owner and not user.system_generated:
-    has_owner = True
-```
-
-This means:
-- **System admin accounts can coexist** with the onboarding flow — they don't prematurely mark the user step as done
-- **Onboarding reset** (delete `.storage/onboarding`) works without deleting auth — the system admin persists, but onboarding still shows the user creation step
-- **User-created accounts** (from the onboarding form) are the only ones that satisfy the owner check
-
-### Onboarding reset (preserving system admin)
-
-```bash
-# Minimal reset — only delete onboarding state, keep auth intact
-$SSH "docker exec homeassistant rm -f /config/.storage/onboarding"
-$SSH "ha core restart"
-```
-
-### Full reset (nuke everything)
-
-```bash
-# Delete all auth + onboarding state
-$SSH "docker exec homeassistant sh -c '\
-  rm -f /config/.storage/onboarding \
-        /config/.storage/auth \
-        /config/.storage/auth_provider.homeassistant \
-        /config/.storage/person'"
-$SSH "ha core restart"
-```
 
 ---
 

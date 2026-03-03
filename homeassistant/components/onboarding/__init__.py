@@ -118,13 +118,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     if STEP_USER not in data["done"]:
         # Users can already have created an owner account via the command line
         # If so, mark the user step as done.
-        # Skip system_generated users (e.g. built-in admin) — they don't count
-        # as "real" owners for onboarding purposes, allowing onboarding reset
-        # while keeping the system admin account.
         has_owner = False
 
         for user in await hass.auth.async_get_users():
-            if user.is_owner and not user.system_generated:
+            if user.is_owner:
                 has_owner = True
                 break
 
