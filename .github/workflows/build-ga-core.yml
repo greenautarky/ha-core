@@ -91,6 +91,7 @@ jobs:
         with:
           context: .
           push: true
+          no-cache: true
           platforms: linux/arm/v7
           build-args: |
             BUILD_FROM=${{ env.BASE_IMAGE }}
