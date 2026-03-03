@@ -1,0 +1,139 @@
+<mxfile host="app.diagrams.net" modified="2026-03-03" agent="Claude" version="24.0.0" type="device">
+  <diagram id="update-flow" name="What to Update When">
+    <mxGraphModel dx="1422" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;What to Update When — Decision Flow&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontColor=#2B5A2A;" vertex="1" parent="1">
+          <mxGeometry x="350" y="20" width="400" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== CHANGE TYPE COLUMN ==================== -->
+        <mxCell id="col-header-change" value="&lt;b&gt;What Changed?&lt;/b&gt;" style="text;html=1;align=center;fontSize=14;fontColor=#2B5A2A;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="200" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Change: UI / Branding -->
+        <mxCell id="change-ui" value="&lt;b&gt;UI / Branding / Onboarding&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Colors, logos, labels, steps,&lt;br&gt;form fields, page layout&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="120" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Change: Backend component -->
+        <mxCell id="change-backend" value="&lt;b&gt;Backend Component&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;greenautarky_telemetry, onboarding&lt;br&gt;views, manifest, WS API&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="220" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Change: HA config -->
+        <mxCell id="change-config" value="&lt;b&gt;HA Config Defaults&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;DEFAULT_CONFIG in config.py,&lt;br&gt;onboarding steps in const.py&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="320" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Change: Release version -->
+        <mxCell id="change-release" value="&lt;b&gt;Release New Version&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Tag a stable release for&lt;br&gt;production devices&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="420" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Change: HAOS system -->
+        <mxCell id="change-haos" value="&lt;b&gt;HAOS System Level&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Version URL, kernel, system&lt;br&gt;packages, partition layout&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E89B30;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="520" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== REPOS TO EDIT ==================== -->
+        <mxCell id="col-header-repo" value="&lt;b&gt;Edit in Repo&lt;/b&gt;" style="text;html=1;align=center;fontSize=14;fontColor=#2B5A2A;" vertex="1" parent="1">
+          <mxGeometry x="340" y="70" width="200" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="repo-fe" value="&lt;b&gt;greenautarky/frontend&lt;/b&gt;&lt;br&gt;src/onboarding/*.ts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="310" y="120" width="200" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="repo-core1" value="&lt;b&gt;greenautarky/ha-core&lt;/b&gt;&lt;br&gt;homeassistant/components/*" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="310" y="230" width="200" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="repo-core2" value="&lt;b&gt;greenautarky/ha-core&lt;/b&gt;&lt;br&gt;homeassistant/config.py, const.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="310" y="325" width="200" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="repo-version" value="&lt;b&gt;greenautarky/haos-version&lt;/b&gt;&lt;br&gt;stable.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="310" y="430" width="200" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="repo-haos" value="&lt;b&gt;greenautarky/ha-operating-system&lt;/b&gt;&lt;br&gt;hassio.mk, defconfig" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E89B30;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="310" y="530" width="200" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== COMMANDS ==================== -->
+        <mxCell id="col-header-cmd" value="&lt;b&gt;Commands to Run&lt;/b&gt;" style="text;html=1;align=center;fontSize=14;fontColor=#2B5A2A;" vertex="1" parent="1">
+          <mxGeometry x="640" y="70" width="300" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cmd-ui" value="&lt;font face=&quot;monospace&quot; size=&quot;1&quot;&gt;cd frontend &amp;amp;&amp;amp; git push&lt;br&gt;gh workflow run build-ga-core.yml \&lt;br&gt;  -R greenautarky/ha-core \&lt;br&gt;  --ref ga/custom-onboarding \&lt;br&gt;  -f tag=2025.11.0-ga.X&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666;fontSize=10;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="600" y="110" width="300" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cmd-backend" value="&lt;font face=&quot;monospace&quot; size=&quot;1&quot;&gt;cd ha-core &amp;amp;&amp;amp; git push&lt;br&gt;# CI auto-triggers on push&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666;fontSize=10;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="600" y="225" width="300" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cmd-config" value="&lt;font face=&quot;monospace&quot; size=&quot;1&quot;&gt;cd ha-core &amp;amp;&amp;amp; git push&lt;br&gt;# CI auto-triggers on push&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666;fontSize=10;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="600" y="325" width="300" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cmd-release" value="&lt;font face=&quot;monospace&quot; size=&quot;1&quot;&gt;# After CI build completes:&lt;br&gt;Edit stable.json:&lt;br&gt;  homeassistant.tinker = 2025.11.0-ga.X&lt;br&gt;  core = 2025.11.0-ga.X&lt;br&gt;cd haos-version &amp;amp;&amp;amp; git push&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666;fontSize=10;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="600" y="410" width="300" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cmd-haos" value="&lt;font face=&quot;monospace&quot; size=&quot;1&quot;&gt;# Requires full HAOS rebuild:&lt;br&gt;cd ha-operating-system&lt;br&gt;make ga_ihost_full_defconfig&lt;br&gt;make  # → .img file&lt;br&gt;# Flash to iHost via ga-flasher&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666;fontSize=10;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="600" y="510" width="300" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== DEPLOY RESULT ==================== -->
+        <mxCell id="col-header-result" value="&lt;b&gt;Deploy How?&lt;/b&gt;" style="text;html=1;align=center;fontSize=14;fontColor=#2B5A2A;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="70" width="200" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="result-ota" value="&lt;b&gt;OTA&lt;/b&gt; (docker pull + rebuild)&lt;br&gt;&lt;font size=&quot;1&quot;&gt;~5 min on device&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2B5A2A;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="220" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="result-auto" value="&lt;b&gt;Auto-update&lt;/b&gt; (Supervisor)&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Next update check cycle&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="420" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="result-flash" value="&lt;b&gt;Flash&lt;/b&gt; (full HAOS image)&lt;br&gt;&lt;font size=&quot;1&quot;&gt;~30 min via ga-flasher&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E89B30;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="520" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: change → repo -->
+        <mxCell id="a1" style="rounded=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="change-ui" target="repo-fe"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="a2" style="rounded=1;strokeColor=#82b366;" edge="1" parent="1" source="change-backend" target="repo-core1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="a3" style="rounded=1;strokeColor=#82b366;" edge="1" parent="1" source="change-config" target="repo-core2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="a4" style="rounded=1;strokeColor=#9673A6;" edge="1" parent="1" source="change-release" target="repo-version"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="a5" style="rounded=1;strokeColor=#E89B30;" edge="1" parent="1" source="change-haos" target="repo-haos"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Arrows: repo → commands -->
+        <mxCell id="b1" style="rounded=1;strokeColor=#6c8ebf;" edge="1" parent="1" source="repo-fe" target="cmd-ui"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="b2" style="rounded=1;strokeColor=#82b366;" edge="1" parent="1" source="repo-core1" target="cmd-backend"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="b3" style="rounded=1;strokeColor=#82b366;" edge="1" parent="1" source="repo-core2" target="cmd-config"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="b4" style="rounded=1;strokeColor=#9673A6;" edge="1" parent="1" source="repo-version" target="cmd-release"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="b5" style="rounded=1;strokeColor=#E89B30;" edge="1" parent="1" source="repo-haos" target="cmd-haos"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Arrows: commands → deploy result -->
+        <mxCell id="c1" style="rounded=1;strokeColor=#2B5A2A;dashed=1;" edge="1" parent="1" source="cmd-ui" target="result-ota"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="c2" style="rounded=1;strokeColor=#2B5A2A;dashed=1;" edge="1" parent="1" source="cmd-backend" target="result-ota"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="c3" style="rounded=1;strokeColor=#2B5A2A;dashed=1;" edge="1" parent="1" source="cmd-config" target="result-ota"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="c4" style="rounded=1;strokeColor=#9673A6;dashed=1;" edge="1" parent="1" source="cmd-release" target="result-auto"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="c5" style="rounded=1;strokeColor=#E89B30;dashed=1;" edge="1" parent="1" source="cmd-haos" target="result-flash"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="&lt;b&gt;Color Legend&lt;/b&gt;&lt;br&gt;🔵 Frontend (TypeScript/Lit)&lt;br&gt;🟢 Core (Python)&lt;br&gt;🟣 Version manifest&lt;br&gt;🟠 HAOS system" style="text;html=1;align=left;fontSize=11;fillColor=#F5F5F5;rounded=1;strokeColor=#CCC;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="640" width="200" height="100" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

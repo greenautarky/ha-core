@@ -1,0 +1,180 @@
+<mxfile host="app.diagrams.net" modified="2026-03-03" agent="Claude" version="24.0.0" type="device">
+  <diagram id="build-pipeline" name="Build Pipeline">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;greenautarky KI-Butler — Build &amp; Deploy Pipeline&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=18;fontColor=#2B5A2A;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="500" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== SOURCE REPOS ==================== -->
+        <mxCell id="repos-group" value="Source Repositories" style="swimlane;startSize=30;fillColor=#F4F9F4;strokeColor=#2B5A2A;fontStyle=1;fontSize=14;fontColor=#2B5A2A;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="500" height="280" as="geometry" />
+        </mxCell>
+
+        <!-- Frontend repo -->
+        <mxCell id="frontend-repo" value="&lt;b&gt;greenautarky/frontend&lt;/b&gt;&lt;br&gt;Branch: ga/custom-onboarding&lt;br&gt;&lt;hr&gt;&lt;font size=&quot;1&quot;&gt;src/onboarding/*.ts&lt;br&gt;ga-branding.ts (CI colors, logos)&lt;br&gt;onboarding-welcome.ts&lt;br&gt;onboarding-create-user.ts&lt;br&gt;onboarding-analytics.ts&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=8;verticalAlign=top;spacingTop=5;fontSize=11;" vertex="1" parent="repos-group">
+          <mxGeometry x="20" y="40" width="220" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- Core repo -->
+        <mxCell id="core-repo" value="&lt;b&gt;greenautarky/ha-core&lt;/b&gt;&lt;br&gt;Branch: ga/custom-onboarding&lt;br&gt;&lt;hr&gt;&lt;font size=&quot;1&quot;&gt;components/greenautarky_telemetry/&lt;br&gt;components/onboarding/manifest.json&lt;br&gt;config.py (DEFAULT_CONFIG)&lt;br&gt;.github/workflows/build-ga-core.yml&lt;br&gt;Dockerfile&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=8;verticalAlign=top;spacingTop=5;fontSize=11;" vertex="1" parent="repos-group">
+          <mxGeometry x="260" y="40" width="220" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- git push arrows -->
+        <mxCell id="push-frontend" value="git push" style="text;html=1;align=center;fontSize=10;fontColor=#E89B30;fontStyle=1;" vertex="1" parent="repos-group">
+          <mxGeometry x="70" y="185" width="60" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="push-core" value="git push" style="text;html=1;align=center;fontSize=10;fontColor=#E89B30;fontStyle=1;" vertex="1" parent="repos-group">
+          <mxGeometry x="320" y="185" width="60" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Manual trigger note -->
+        <mxCell id="manual-note" value="&lt;font color=&quot;#E89B30&quot;&gt;Frontend push alone does NOT&lt;br&gt;trigger CI. Must also push core&lt;br&gt;or use workflow_dispatch.&lt;/font&gt;" style="text;html=1;align=center;fontSize=10;fontStyle=2;" vertex="1" parent="repos-group">
+          <mxGeometry x="100" y="210" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== CI BUILD ==================== -->
+        <mxCell id="ci-group" value="GitHub Actions CI" style="swimlane;startSize=30;fillColor=#FFF2CC;strokeColor=#D6B656;fontStyle=1;fontSize=14;fontColor=#2B5A2A;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="600" y="80" width="340" height="280" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ci-step1" value="1. Checkout core + frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;fontSize=10;" vertex="1" parent="ci-group">
+          <mxGeometry x="20" y="40" width="300" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ci-step2" value="2. yarn install + build_frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;fontSize=10;" vertex="1" parent="ci-group">
+          <mxGeometry x="20" y="70" width="300" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ci-step3" value="3. python3 -m build → frontend .whl" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;fontSize=10;" vertex="1" parent="ci-group">
+          <mxGeometry x="20" y="100" width="300" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ci-step4" value="4. QEMU + Buildx (linux/arm/v7)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;fontSize=10;" vertex="1" parent="ci-group">
+          <mxGeometry x="20" y="130" width="300" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ci-step5" value="5. docker build (Dockerfile + .whl + core)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;fontSize=10;" vertex="1" parent="ci-group">
+          <mxGeometry x="20" y="160" width="300" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ci-step6" value="6. docker push → GHCR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;fontSize=10;fontStyle=1;" vertex="1" parent="ci-group">
+          <mxGeometry x="20" y="190" width="300" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ci-time" value="~24 min total" style="text;html=1;align=center;fontSize=10;fontColor=#888;" vertex="1" parent="ci-group">
+          <mxGeometry x="100" y="225" width="100" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: repos → CI -->
+        <mxCell id="arrow-repo-ci" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#2B5A2A;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="repos-group" target="ci-group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-repo-ci-label" value="triggers" style="edgeLabel;html=1;align=center;fontSize=10;fontColor=#2B5A2A;fontStyle=1;" vertex="1" connectable="0" parent="arrow-repo-ci">
+          <mxGeometry x="-0.2" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- ==================== GHCR REGISTRY ==================== -->
+        <mxCell id="ghcr" value="&lt;b&gt;GHCR Registry&lt;/b&gt;&lt;br&gt;&lt;br&gt;ghcr.io/greenautarky/&lt;br&gt;tinker-homeassistant&lt;br&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Tags: latest, 2025.11.0-ga.X, dev-&amp;lt;sha&amp;gt;&lt;br&gt;Platform: linux/arm/v7&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#E8F5E9;strokeColor=#2B5A2A;fontSize=11;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="100" width="200" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: CI → GHCR -->
+        <mxCell id="arrow-ci-ghcr" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#2B5A2A;strokeWidth=2;exitX=1;exitY=0.35;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="ci-group" target="ghcr">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-ci-ghcr-label" value="push" style="edgeLabel;html=1;align=center;fontSize=10;fontColor=#2B5A2A;fontStyle=1;" vertex="1" connectable="0" parent="arrow-ci-ghcr">
+          <mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- ==================== VERSION REPO ==================== -->
+        <mxCell id="version-repo" value="&lt;b&gt;greenautarky/haos-version&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;stable.json:&lt;br&gt;images.core → ghcr.io/greenautarky/...&lt;br&gt;homeassistant.tinker → 2025.11.0-ga.X&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=11;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="300" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- ==================== DEPLOYMENT PATHS ==================== -->
+
+        <!-- Method A: Manual Testing -->
+        <mxCell id="deploy-a-group" value="Method A: Manual Testing" style="swimlane;startSize=25;fillColor=#FFE0B2;strokeColor=#E89B30;fontStyle=1;fontSize=12;fontColor=#2B5A2A;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="440" width="560" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="da-step1" value="docker pull ghcr.io/greenautarky/&lt;br&gt;tinker-homeassistant:latest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;fontSize=10;" vertex="1" parent="deploy-a-group">
+          <mxGeometry x="20" y="35" width="240" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="da-step2" value="docker tag → ghcr.io/home-assistant/&lt;br&gt;tinker-homeassistant:2025.11.3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;fontSize=10;" vertex="1" parent="deploy-a-group">
+          <mxGeometry x="20" y="80" width="240" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="da-step3" value="ha core rebuild" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;fontSize=10;fontStyle=1;" vertex="1" parent="deploy-a-group">
+          <mxGeometry x="20" y="125" width="240" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="da-note" value="&lt;font color=&quot;#E89B30&quot;&gt;Stock HAOS only.&lt;br&gt;Supervisor expects stock image name.&lt;br&gt;Retag fakes it.&lt;br&gt;&lt;br&gt;⚠ Auto-update will overwrite!&lt;/font&gt;" style="text;html=1;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="deploy-a-group">
+          <mxGeometry x="300" y="35" width="240" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: GHCR → Method A -->
+        <mxCell id="arrow-ghcr-a" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#E89B30;strokeWidth=2;dashed=1;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ghcr" target="deploy-a-group">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1020" y="410" />
+              <mxPoint x="320" y="410" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow-ghcr-a-label" value="docker pull" style="edgeLabel;html=1;align=center;fontSize=10;fontColor=#E89B30;fontStyle=1;" vertex="1" connectable="0" parent="arrow-ghcr-a">
+          <mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- Method B: Production HAOS -->
+        <mxCell id="deploy-b-group" value="Method B: Production (greenautarky HAOS)" style="swimlane;startSize=25;fillColor=#E8F5E9;strokeColor=#2B5A2A;fontStyle=1;fontSize=12;fontColor=#2B5A2A;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="660" y="440" width="560" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="db-step1" value="Supervisor reads version URL&lt;br&gt;→ greenautarky/haos-version/stable.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;fontSize=10;" vertex="1" parent="deploy-b-group">
+          <mxGeometry x="20" y="35" width="260" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="db-step2" value="Resolves: ghcr.io/greenautarky/&lt;br&gt;tinker-homeassistant:2025.11.0-ga.X" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff;fontSize=10;" vertex="1" parent="deploy-b-group">
+          <mxGeometry x="20" y="80" width="260" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="db-step3" value="Auto-pull + update (or manual &quot;Update&quot; in UI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;fontSize=10;fontStyle=1;" vertex="1" parent="deploy-b-group">
+          <mxGeometry x="20" y="125" width="260" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="db-note" value="&lt;font color=&quot;#2B5A2A&quot;&gt;greenautarky HAOS build required.&lt;br&gt;hassio.mk points to our version URL.&lt;br&gt;No retagging needed.&lt;br&gt;&lt;br&gt;✓ Self-contained update pipeline&lt;/font&gt;" style="text;html=1;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="deploy-b-group">
+          <mxGeometry x="300" y="35" width="240" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow: GHCR → Method B -->
+        <mxCell id="arrow-ghcr-b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#2B5A2A;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="ghcr" target="deploy-b-group">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1120" y="410" />
+              <mxPoint x="940" y="410" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Arrow: Version repo → Method B -->
+        <mxCell id="arrow-ver-b" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#9673A6;strokeWidth=2;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.8;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="version-repo" target="deploy-b-group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-ver-b-label" value="version lookup" style="edgeLabel;html=1;align=center;fontSize=10;fontColor=#9673A6;fontStyle=1;" vertex="1" connectable="0" parent="arrow-ver-b">
+          <mxGeometry relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- ==================== DEVICE ==================== -->
+        <mxCell id="device" value="&lt;b&gt;iHost (Sonoff RV1126)&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;HAOS + Supervisor + HA Core container&lt;br&gt;arch: armv7, machine: tinker&lt;br&gt;SSH port: 22222&lt;/font&gt;" style="shape=mxgraph.cisco.computers_and_peripherals.generic_appliance;html=1;whiteSpace=wrap;fillColor=#E8F5E9;strokeColor=#2B5A2A;fontSize=11;verticalAlign=bottom;spacingBottom=5;" vertex="1" parent="1">
+          <mxGeometry x="510" y="700" width="260" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows: deploy → device -->
+        <mxCell id="arrow-a-dev" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#E89B30;strokeWidth=2;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="deploy-a-group" target="device">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-b-dev" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#2B5A2A;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="deploy-b-group" target="device">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

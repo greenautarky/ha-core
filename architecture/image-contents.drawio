@@ -1,0 +1,84 @@
+<mxfile host="app.diagrams.net" modified="2026-03-03" agent="Claude" version="24.0.0" type="device">
+  <diagram id="image-contents" name="Docker Image Contents">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;Docker Image: ghcr.io/greenautarky/tinker-homeassistant&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=16;fontColor=#2B5A2A;" vertex="1" parent="1">
+          <mxGeometry x="250" y="20" width="500" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Base image -->
+        <mxCell id="base" value="&lt;b&gt;Base Image&lt;/b&gt;&lt;br&gt;ghcr.io/home-assistant/armv7-homeassistant-base:2025.10.1&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Alpine Linux + Python 3.13 + S6 Overlay&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="50" y="70" width="500" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- System tools layer -->
+        <mxCell id="tools" value="&lt;b&gt;System Layer&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;go2rtc v1.9.11 + uv v0.9.6 (pip installer)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="50" y="130" width="500" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Python deps layer -->
+        <mxCell id="pydeps" value="&lt;b&gt;Python Dependencies&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;requirements.txt + requirements_all.txt (all HA integrations)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="50" y="180" width="500" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Frontend wheel (custom) -->
+        <mxCell id="fe-wheel" value="&lt;b&gt;🔵 Custom Frontend Wheel&lt;/b&gt;&lt;br&gt;home_assistant_frontend-*.whl → /usr/local/lib/python3.13/site-packages/hass_frontend/&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Built from greenautarky/frontend (ga/custom-onboarding)&lt;br&gt;Contains: onboarding JS bundles with GA branding, KI-Butler UI, German labels&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="50" y="230" width="500" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Core code (custom) -->
+        <mxCell id="core-code" value="&lt;b&gt;🟢 Custom HA Core&lt;/b&gt;&lt;br&gt;/usr/src/homeassistant/homeassistant/&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Built from greenautarky/ha-core (ga/custom-onboarding)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="50" y="320" width="500" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Custom components detail -->
+        <mxCell id="custom-detail" value="" style="swimlane;startSize=0;fillColor=#FAFAFA;strokeColor=#82b366;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="600" y="70" width="350" height="560" as="geometry" />
+        </mxCell>
+
+        <mxCell id="detail-title" value="&lt;b&gt;Custom Components (greenautarky additions)&lt;/b&gt;" style="text;html=1;align=center;fontSize=12;fontColor=#2B5A2A;fontStyle=1;" vertex="1" parent="custom-detail">
+          <mxGeometry x="10" y="10" width="330" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="comp-telemetry" value="&lt;b&gt;components/greenautarky_telemetry/&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;├── __init__.py — WS API (get/set), Store persistence&lt;br&gt;├── manifest.json — integration_type: service&lt;br&gt;&lt;br&gt;WS commands:&lt;br&gt;  greenautarky_telemetry/get&lt;br&gt;  greenautarky_telemetry/set&lt;br&gt;&lt;br&gt;Storage: .storage/greenautarky_telemetry&lt;br&gt;  → {error_logs: bool, metrics: bool}&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=8;verticalAlign=top;spacingTop=5;" vertex="1" parent="custom-detail">
+          <mxGeometry x="10" y="45" width="330" height="145" as="geometry" />
+        </mxCell>
+
+        <mxCell id="comp-onboarding" value="&lt;b&gt;components/onboarding/manifest.json&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;dependencies: [auth, greenautarky_telemetry, http]&lt;br&gt;&lt;br&gt;&lt;/font&gt;&lt;b&gt;components/onboarding/const.py&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Custom steps: STEP_GDPR, STEP_USER,&lt;br&gt;STEP_CUSTOM_PAGES, STEP_ANALYTICS&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=8;verticalAlign=top;spacingTop=5;" vertex="1" parent="custom-detail">
+          <mxGeometry x="10" y="200" width="330" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="comp-config" value="&lt;b&gt;config.py — DEFAULT_CONFIG&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Includes &quot;greenautarky_telemetry:&quot; so the&lt;br&gt;component auto-loads on fresh installs&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;spacingLeft=8;verticalAlign=top;spacingTop=5;" vertex="1" parent="custom-detail">
+          <mxGeometry x="10" y="310" width="330" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fe-detail" value="&lt;b&gt;Frontend Onboarding Bundle&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;hass_frontend/frontend_latest/onboarding.*.js&lt;br&gt;&lt;br&gt;Components:&lt;br&gt;  ga-branding.ts — CI colors, dual logos, tagline&lt;br&gt;  onboarding-welcome.ts — GA+HA logos, KI-Butler&lt;br&gt;  onboarding-gdpr.ts — German privacy notice&lt;br&gt;  onboarding-create-user.ts — email/username toggle&lt;br&gt;  onboarding-custom-pages.ts — combined info page&lt;br&gt;  onboarding-analytics.ts — telemetry ON by default&lt;br&gt;  ha-onboarding.ts — --primary-color: #2B5A2A&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=left;spacingLeft=8;verticalAlign=top;spacingTop=5;" vertex="1" parent="custom-detail">
+          <mxGeometry x="10" y="380" width="330" height="170" as="geometry" />
+        </mxCell>
+
+        <!-- Arrows from layers to detail -->
+        <mxCell id="arr-fe" style="rounded=1;strokeColor=#6c8ebf;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;" edge="1" parent="1" source="fe-wheel" target="custom-detail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arr-core" style="rounded=1;strokeColor=#82b366;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;" edge="1" parent="1" source="core-code" target="custom-detail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Config volume -->
+        <mxCell id="volume" value="&lt;b&gt;/config/ (mounted volume — persists)&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;configuration.yaml, .storage/, automations.yaml, themes/&lt;br&gt;Not part of image — lives on iHost data partition&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E89B30;fontSize=10;align=left;spacingLeft=8;strokeWidth=2;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="390" width="500" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Build info -->
+        <mxCell id="buildinfo" value="&lt;font size=&quot;1&quot;&gt;&lt;b&gt;Build:&lt;/b&gt; QEMU armv7 cross-compile on ubuntu-latest&lt;br&gt;&lt;b&gt;Platform:&lt;/b&gt; linux/arm/v7&lt;br&gt;&lt;b&gt;Machine:&lt;/b&gt; tinker (Sonoff iHost RV1126)&lt;br&gt;&lt;b&gt;Tags:&lt;/b&gt; :latest, :2025.11.0-ga.X, :dev-&amp;lt;sha&amp;gt;&lt;/font&gt;" style="text;html=1;align=left;fontSize=10;fillColor=#F5F5F5;rounded=1;strokeColor=#CCC;spacingLeft=8;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="50" y="460" width="350" height="70" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
