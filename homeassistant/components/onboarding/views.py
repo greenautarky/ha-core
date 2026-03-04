@@ -434,6 +434,20 @@ class AnalyticsOnboardingView(_BaseOnboardingStepView):
 
             await self._async_mark_done(hass)
 
+            # After re-onboarding: restore admin ownership.
+            # ga-reset-onboarding sets admin.is_owner=False to re-trigger
+            # the wizard. Now that the new tenant has completed onboarding,
+            # restore it. On fresh installs this is a no-op (admin already
+            # has is_owner=True from _user_should_be_owner()).
+            for user in await hass.auth.async_get_users():
+                if (
+                    not user.system_generated
+                    and not user.is_owner
+                    and any(g.id == GROUP_ID_ADMIN for g in user.groups)
+                ):
+                    user.is_owner = True
+            hass.auth._store._async_schedule_save()
+
             # Set up default integrations since we skip the core_config step
             onboard_integrations = [
                 "google_translate",
