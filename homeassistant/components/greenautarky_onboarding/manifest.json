@@ -1,0 +1,8 @@
+{
+  "domain": "greenautarky_onboarding",
+  "name": "greenautarky Onboarding",
+  "codeowners": [],
+  "dependencies": ["http", "websocket_api", "panel_custom", "frontend", "greenautarky_telemetry"],
+  "documentation": "",
+  "integration_type": "service"
+}

@@ -62,6 +62,9 @@ frontend:
 # greenautarky telemetry preferences (WS API for onboarding)
 greenautarky_telemetry:
 
+# greenautarky post-onboarding setup wizard
+greenautarky_onboarding:
+
 automation: !include {AUTOMATION_CONFIG_PATH}
 script: !include {SCRIPT_CONFIG_PATH}
 scene: !include {SCENE_CONFIG_PATH}
