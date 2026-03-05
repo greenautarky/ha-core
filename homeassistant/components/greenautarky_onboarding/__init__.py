@@ -1,15 +1,18 @@
 """Integration for greenautarky post-onboarding setup wizard.
 
-Serves a standalone unauthenticated page at /greenautarky-setup that guides
-the user through GDPR consent, telemetry preferences, and device info.
+Serves a standalone unauthenticated page at /greenautarky-setup AND registers
+a HA panel so the wizard is accessible from the mobile app too.
 In tenant mode, also handles account creation.
 """
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
+from homeassistant.components import panel_custom
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
@@ -25,6 +28,9 @@ from .http import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+URL_BASE = "/greenautarky_onboarding_static"
+PANEL_URL_PATH = "greenautarky-setup-panel"
 
 DEFAULT_STATE: dict[str, Any] = {
     "completed": False,
@@ -51,7 +57,29 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(GAOnboardingCompleteView())
     hass.http.register_view(GAOnboardingCreateTenantView())
 
+    # If onboarding not completed, also register a panel for the HA app
     if not state.get("completed"):
+        await _async_register_panel(hass)
         _LOGGER.info("greenautarky onboarding available at /greenautarky-setup")
 
     return True
+
+
+async def _async_register_panel(hass: HomeAssistant) -> None:
+    """Register the panel so the wizard is accessible from the HA app."""
+    panel_dir = Path(__file__).parent / "panel" / "dist"
+
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(URL_BASE, str(panel_dir), cache_headers=False)]
+    )
+
+    await panel_custom.async_register_panel(
+        hass=hass,
+        frontend_url_path=PANEL_URL_PATH,
+        webcomponent_name="ga-onboarding-panel",
+        sidebar_title="Einrichtung",
+        sidebar_icon="mdi:rocket-launch",
+        module_url=f"{URL_BASE}/entrypoint.js",
+        embed_iframe=False,
+        require_admin=False,
+    )

@@ -156,6 +156,13 @@ class GAOnboardingCompleteView(HomeAssistantView):
         state["completed"] = True
         await store.async_save(state)
 
+        # Remove the sidebar panel (for app users)
+        from homeassistant.components import frontend
+
+        frontend.async_remove_panel(
+            hass, "greenautarky-setup-panel", warn_if_unknown=False
+        )
+
         _LOGGER.info("greenautarky onboarding completed")
 
         return self.json({"status": "ok", "redirect": "/"})

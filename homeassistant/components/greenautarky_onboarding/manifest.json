@@ -2,7 +2,7 @@
   "domain": "greenautarky_onboarding",
   "name": "greenautarky Onboarding",
   "codeowners": [],
-  "dependencies": ["http", "greenautarky_telemetry"],
+  "dependencies": ["http", "panel_custom", "greenautarky_telemetry"],
   "documentation": "",
   "integration_type": "service"
 }
