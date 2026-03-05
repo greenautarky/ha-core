@@ -1,8 +1,13 @@
-"""HTTP views for greenautarky onboarding."""
+"""HTTP views for greenautarky onboarding.
+
+All views are unauthenticated (like stock HA onboarding) but gated by the
+completion state — once onboarding is done, the endpoints return 403.
+"""
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from aiohttp import web
@@ -12,9 +17,12 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+# Load the HTML template once at import time
+_PAGE_HTML = (Path(__file__).parent / "page.html").read_text(encoding="utf-8")
 
 
 def _get_store(hass: HomeAssistant) -> Store[dict[str, Any]]:
@@ -25,6 +33,33 @@ def _get_store(hass: HomeAssistant) -> Store[dict[str, Any]]:
 def _get_state(hass: HomeAssistant) -> dict[str, Any]:
     """Get the current onboarding state."""
     return hass.data[DOMAIN]["state"]
+
+
+def _check_not_completed(hass: HomeAssistant) -> web.Response | None:
+    """Return a 403 response if onboarding is already completed."""
+    state = _get_state(hass)
+    if state.get("completed"):
+        return web.json_response(
+            {"message": "Onboarding already completed"}, status=403
+        )
+    return None
+
+
+class GAOnboardingPageView(HomeAssistantView):
+    """Serve the standalone onboarding wizard page."""
+
+    url = "/greenautarky-setup"
+    name = "greenautarky_onboarding:page"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Serve the onboarding wizard HTML page."""
+        hass: HomeAssistant = request.app["hass"]
+        state = _get_state(hass)
+        if state.get("completed"):
+            # Redirect to dashboard if already done
+            raise web.HTTPFound("/")
+        return web.Response(text=_PAGE_HTML, content_type="text/html")
 
 
 class GAOnboardingStatusView(HomeAssistantView):
@@ -46,17 +81,21 @@ class GAOnboardingGDPRView(HomeAssistantView):
 
     url = "/api/greenautarky_onboarding/gdpr"
     name = "api:greenautarky_onboarding:gdpr"
-    requires_auth = True
+    requires_auth = False
 
     async def post(self, request: web.Request) -> web.Response:
         """Accept GDPR consent."""
         hass: HomeAssistant = request.app["hass"]
+        if err := _check_not_completed(hass):
+            return err
+
         state = _get_state(hass)
         store = _get_store(hass)
 
         body = await request.json()
         state["gdpr_accepted"] = bool(body.get("accepted", False))
-        state["steps_done"].append("gdpr")
+        if "gdpr" not in state["steps_done"]:
+            state["steps_done"].append("gdpr")
         await store.async_save(state)
 
         return self.json({"status": "ok"})
@@ -67,11 +106,14 @@ class GAOnboardingTelemetryView(HomeAssistantView):
 
     url = "/api/greenautarky_onboarding/telemetry"
     name = "api:greenautarky_onboarding:telemetry"
-    requires_auth = True
+    requires_auth = False
 
     async def post(self, request: web.Request) -> web.Response:
         """Save telemetry preferences."""
         hass: HomeAssistant = request.app["hass"]
+        if err := _check_not_completed(hass):
+            return err
+
         state = _get_state(hass)
         store = _get_store(hass)
 
@@ -86,7 +128,8 @@ class GAOnboardingTelemetryView(HomeAssistantView):
             telemetry_store: Store = telemetry_data["store"]
             await telemetry_store.async_save(prefs)
 
-        state["steps_done"].append("telemetry")
+        if "telemetry" not in state["steps_done"]:
+            state["steps_done"].append("telemetry")
         await store.async_save(state)
 
         return self.json({"status": "ok"})
@@ -97,24 +140,21 @@ class GAOnboardingCompleteView(HomeAssistantView):
 
     url = "/api/greenautarky_onboarding/complete"
     name = "api:greenautarky_onboarding:complete"
-    requires_auth = True
+    requires_auth = False
 
     async def post(self, request: web.Request) -> web.Response:
         """Complete the GA onboarding."""
         hass: HomeAssistant = request.app["hass"]
+        if err := _check_not_completed(hass):
+            return err
+
         state = _get_state(hass)
         store = _get_store(hass)
 
-        state["steps_done"].append("complete")
+        if "complete" not in state["steps_done"]:
+            state["steps_done"].append("complete")
         state["completed"] = True
         await store.async_save(state)
-
-        # Remove the panel so user goes to normal dashboard
-        from homeassistant.components import frontend
-
-        from .const import PANEL_URL_PATH
-
-        frontend.async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
 
         _LOGGER.info("greenautarky onboarding completed")
 
@@ -126,16 +166,20 @@ class GAOnboardingCreateTenantView(HomeAssistantView):
 
     url = "/api/greenautarky_onboarding/create_tenant"
     name = "api:greenautarky_onboarding:create_tenant"
-    requires_auth = True
+    requires_auth = False
 
     async def post(self, request: web.Request) -> web.Response:
         """Create a new tenant user with normal (non-admin) privileges."""
         hass: HomeAssistant = request.app["hass"]
-        user = request["hass_user"]
+        if err := _check_not_completed(hass):
+            return err
 
-        # Only admin can create tenants
-        if not user.is_owner:
-            return self.json_message("Unauthorized", status_code=403)
+        # Only allow in tenant mode
+        state = _get_state(hass)
+        if not state.get("tenant_mode"):
+            return web.json_response(
+                {"message": "Not in tenant mode"}, status=403
+            )
 
         body = await request.json()
         name = body.get("name", "").strip()
@@ -164,7 +208,6 @@ class GAOnboardingCreateTenantView(HomeAssistantView):
         await hass.auth.async_link_user(tenant_user, credentials)
 
         # Mark account step as done
-        state = _get_state(hass)
         store = _get_store(hass)
         if "account" not in state.get("steps_done", []):
             state.setdefault("steps_done", []).append("account")
