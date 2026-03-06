@@ -18,8 +18,7 @@ venv
 .vagrant
 
 # Frontend build artifacts (the .whl is copied separately)
-frontend-build/node_modules
-frontend-build/.git
+frontend-build/
 
 # Claude config
 .claude
