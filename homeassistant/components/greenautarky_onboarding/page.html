@@ -98,6 +98,19 @@
   .btn-app-link { text-decoration: none; }
   .error { color: #d32f2f; font-size: 13px; margin-top: 8px; }
   .hidden { display: none; }
+  .login-type-selector {
+    display: flex; gap: 8px; margin: 16px 0;
+  }
+  .login-type-btn {
+    flex: 1; padding: 10px 12px; border: 2px solid #ccc; border-radius: 8px;
+    background: #fff; cursor: pointer; text-align: center; font-family: inherit;
+    font-size: 14px; color: #555; transition: all 0.2s;
+  }
+  .login-type-btn:hover { border-color: #aaa; }
+  .login-type-btn.active {
+    border-color: var(--ga-primary); background: #f0f7f0; color: var(--ga-primary);
+    font-weight: 500;
+  }
 </style>
 </head>
 <body>
@@ -130,7 +143,7 @@
   let step = "gdpr";
   let tenantMode = false;
   let telemetryPrefs = { error_logs: true, metrics: true };
-  let tenantData = { name: "", username: "", password: "", password2: "" };
+  let tenantData = { name: "", username: "", password: "", password2: "", useEmail: true };
   let error = "";
 
   function getSteps() {
@@ -176,6 +189,10 @@
     error = "";
     if (!tenantData.name || !tenantData.username || !tenantData.password) {
       error = "Bitte alle Felder ausfuellen.";
+      render(); return;
+    }
+    if (tenantData.useEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(tenantData.username)) {
+      error = "Bitte eine gueltige E-Mail-Adresse eingeben.";
       render(); return;
     }
     if (tenantData.password !== tenantData.password2) {
@@ -225,13 +242,22 @@
     let html = "";
 
     if (step === "account") {
+      var useEmail = tenantData.useEmail;
+      var loginLabel = useEmail ? "E-Mail-Adresse" : "Benutzername";
+      var loginPlaceholder = useEmail ? "z.B. max@beispiel.de" : "z.B. max";
+      var loginType = useEmail ? "email" : "text";
       html = '<div class="step-indicator">Schritt ' + num + ' von ' + total + '</div>' +
         '<h1>Konto erstellen</h1>' +
         '<p>Erstelle dein persoenliches Benutzerkonto fuer den KI-Butler.</p>' +
+        '<p style="font-size:13px;color:#666;margin-bottom:4px;">Anmelden mit:</p>' +
+        '<div class="login-type-selector">' +
+        '<button type="button" class="login-type-btn' + (!useEmail ? ' active' : '') + '" id="btn-login-username">Benutzername</button>' +
+        '<button type="button" class="login-type-btn' + (useEmail ? ' active' : '') + '" id="btn-login-email">E-Mail</button>' +
+        '</div>' +
         '<div class="form-field"><label for="acc-name">Anzeigename</label>' +
         '<input type="text" id="acc-name" placeholder="z.B. Max Mustermann" value="' + esc(tenantData.name) + '"></div>' +
-        '<div class="form-field"><label for="acc-username">Benutzername</label>' +
-        '<input type="text" id="acc-username" placeholder="z.B. max" value="' + esc(tenantData.username) + '" autocapitalize="none"></div>' +
+        '<div class="form-field"><label for="acc-username">' + loginLabel + '</label>' +
+        '<input type="' + loginType + '" id="acc-username" placeholder="' + loginPlaceholder + '" value="' + esc(tenantData.username) + '" autocapitalize="none"></div>' +
         '<div class="form-field"><label for="acc-password">Passwort</label>' +
         '<input type="password" id="acc-password" placeholder="Mindestens 6 Zeichen"></div>' +
         '<div class="form-field"><label for="acc-password2">Passwort wiederholen</label>' +
@@ -331,6 +357,8 @@
     bind("acc-username", "input", function(e) { tenantData.username = e.target.value; });
     bind("acc-password", "input", function(e) { tenantData.password = e.target.value; });
     bind("acc-password2", "input", function(e) { tenantData.password2 = e.target.value; });
+    bind("btn-login-username", "click", function() { tenantData.useEmail = false; error = ""; render(); });
+    bind("btn-login-email", "click", function() { tenantData.useEmail = true; error = ""; render(); });
     bind("btn-create-account", "click", createAccount);
     bind("btn-accept-gdpr", "click", acceptGDPR);
     bind("tel-errors", "change", function(e) { telemetryPrefs.error_logs = e.target.checked; });

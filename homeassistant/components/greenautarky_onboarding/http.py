@@ -1,7 +1,9 @@
 """HTTP views for greenautarky onboarding.
 
-All views are unauthenticated (like stock HA onboarding) but gated by the
-completion state — once onboarding is done, the endpoints return 403.
+Onboarding views are unauthenticated (like stock HA onboarding) but gated by
+the completion state — once onboarding is done, the endpoints return 403.
+
+Consent views are authenticated and available after onboarding is complete.
 """
 
 from __future__ import annotations
@@ -17,12 +19,14 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
+from .consent import async_record_consent, get_outdated_consents
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# Load the HTML template once at import time
+# Load HTML templates once at import time
 _PAGE_HTML = (Path(__file__).parent / "page.html").read_text(encoding="utf-8")
+_CONSENT_HTML = (Path(__file__).parent / "consent_page.html").read_text(encoding="utf-8")
 
 
 def _get_store(hass: HomeAssistant) -> Store[dict[str, Any]]:
@@ -223,3 +227,68 @@ class GAOnboardingCreateTenantView(HomeAssistantView):
         _LOGGER.info("Created tenant user: %s", name)
 
         return self.json({"status": "ok", "user_id": tenant_user.id})
+
+
+# ---------------------------------------------------------------------------
+# Consent views (authenticated — for post-onboarding consent re-confirmation)
+# ---------------------------------------------------------------------------
+
+
+class GAConsentPageView(HomeAssistantView):
+    """Serve the standalone consent re-confirmation page."""
+
+    url = "/greenautarky-consent"
+    name = "greenautarky_onboarding:consent_page"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Serve the consent page HTML."""
+        return web.Response(text=_CONSENT_HTML, content_type="text/html")
+
+
+class GAConsentStatusView(HomeAssistantView):
+    """Return which consents are outdated."""
+
+    url = "/api/greenautarky_onboarding/consent/status"
+    name = "api:greenautarky_onboarding:consent:status"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Return consent status."""
+        hass: HomeAssistant = request.app["hass"]
+        state = _get_state(hass)
+        outdated = get_outdated_consents(state)
+        return self.json({
+            "consents": state.get("consents", {}),
+            "outdated": list(outdated.keys()),
+        })
+
+
+class GAConsentAcceptView(HomeAssistantView):
+    """Accept a consent type."""
+
+    url = "/api/greenautarky_onboarding/consent/accept"
+    name = "api:greenautarky_onboarding:consent:accept"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Record consent acceptance."""
+        hass: HomeAssistant = request.app["hass"]
+        store = _get_store(hass)
+        state = _get_state(hass)
+
+        body = await request.json()
+        consent_type = body.get("type", "")
+
+        if not consent_type:
+            return web.json_response(
+                {"message": "Missing 'type' field"}, status=400
+            )
+
+        ok = await async_record_consent(hass, store, state, consent_type)
+        if not ok:
+            return web.json_response(
+                {"message": f"Unknown consent type: {consent_type}"}, status=400
+            )
+
+        return self.json({"status": "ok"})
