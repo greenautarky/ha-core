@@ -690,6 +690,13 @@ class IndexView(web_urldispatcher.AbstractResource):
         if not onboarding.async_is_onboarded(hass):
             return web.Response(status=302, headers={"location": "/onboarding.html"})
 
+        # Redirect to greenautarky onboarding if not completed
+        ga_onboarding = hass.data.get("greenautarky_onboarding")
+        if ga_onboarding and not ga_onboarding["state"].get("completed"):
+            return web.Response(
+                status=302, headers={"location": "/greenautarky-setup"}
+            )
+
         template = self._template_cache or await hass.async_add_executor_job(
             self.get_template
         )
