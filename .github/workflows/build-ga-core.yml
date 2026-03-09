@@ -107,3 +107,4 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:landingpage
