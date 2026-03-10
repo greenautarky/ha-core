@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Image tag (e.g. 2025.11.3-ga.1)"
+        description: "Image tag (e.g. 2025.11.3.1)"
         required: true
-        default: "2025.11.3-ga.1"
+        default: "2025.11.3.1"
   push:
     branches:
       - ga/custom-onboarding
