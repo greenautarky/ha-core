@@ -47,6 +47,29 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Verify frontend version consistency
+        run: |
+          FE_VERSION=$(grep -oP '^version\s*=\s*"\K[^"]+' frontend-build/pyproject.toml)
+          echo "Frontend version: $FE_VERSION"
+          ERRORS=0
+          for FILE in \
+            homeassistant/components/frontend/manifest.json \
+            homeassistant/package_constraints.txt \
+            requirements_all.txt \
+            requirements_test_all.txt; do
+            PINNED=$(grep -oP 'home-assistant-frontend==\K[^\s"]+' "$FILE" || true)
+            if [ "$PINNED" != "$FE_VERSION" ]; then
+              echo "::error file=$FILE::Version mismatch: $FILE has '$PINNED', expected '$FE_VERSION'"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "  OK: $FILE matches ($PINNED)"
+            fi
+          done
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::Frontend version mismatch in $ERRORS file(s). Update all 5 locations to '$FE_VERSION'."
+            exit 1
+          fi
+
       - name: Install frontend dependencies
         working-directory: frontend-build
         run: yarn install --frozen-lockfile

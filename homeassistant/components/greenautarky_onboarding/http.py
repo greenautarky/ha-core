@@ -15,6 +15,7 @@ from typing import Any
 from aiohttp import web
 
 from homeassistant.auth.const import GROUP_ID_USER
+from homeassistant.auth.providers.homeassistant import HassAuthProvider
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -23,6 +24,14 @@ from .consent import async_record_consent, get_outdated_consents
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _async_get_hass_provider(hass: HomeAssistant) -> HassAuthProvider:
+    """Get the Home Assistant auth provider."""
+    for prv in hass.auth.auth_providers:
+        if prv.type == "homeassistant":
+            return prv
+    raise RuntimeError("Home Assistant auth provider not found")
 
 # Load HTML templates once at import time
 _PAGE_HTML = (Path(__file__).parent / "page.html").read_text(encoding="utf-8")
@@ -172,61 +181,72 @@ class GAOnboardingCompleteView(HomeAssistantView):
         return self.json({"status": "ok", "redirect": "/"})
 
 
-class GAOnboardingCreateTenantView(HomeAssistantView):
-    """Create a tenant (normal) user during re-onboarding."""
+class GAOnboardingCreateUserView(HomeAssistantView):
+    """Create a user account during greenautarky onboarding.
 
-    url = "/api/greenautarky_onboarding/create_tenant"
-    name = "api:greenautarky_onboarding:create_tenant"
+    This endpoint is unauthenticated (the end user has no account yet).
+    It creates a normal (non-admin) user and returns an auth_code so the
+    frontend can authenticate and continue with authenticated steps.
+    """
+
+    url = "/api/greenautarky_onboarding/create_user"
+    name = "api:greenautarky_onboarding:create_user"
     requires_auth = False
 
     async def post(self, request: web.Request) -> web.Response:
-        """Create a new tenant user with normal (non-admin) privileges."""
+        """Create a new user and return auth_code for frontend auth."""
         hass: HomeAssistant = request.app["hass"]
         if err := _check_not_completed(hass):
             return err
 
-        # Only allow in tenant mode
-        state = _get_state(hass)
-        if not state.get("tenant_mode"):
-            return web.json_response(
-                {"message": "Not in tenant mode"}, status=403
-            )
-
         body = await request.json()
+        client_id = body.get("client_id", "").strip()
         name = body.get("name", "").strip()
         username = body.get("username", "").strip()
         password = body.get("password", "")
+        language = body.get("language", "de")
 
-        if not name or not username or not password:
+        if not name or not username or not password or not client_id:
             return self.json_message(
-                "name, username, and password are required", status_code=400
+                "client_id, name, username, and password are required",
+                status_code=400,
             )
 
         # Create user in normal user group (not admin)
-        tenant_user = await hass.auth.async_create_user(
+        user = await hass.auth.async_create_user(
             name, group_ids=[GROUP_ID_USER]
         )
 
-        # Create credentials (homeassistant auth provider)
-        provider = hass.auth.auth_providers[0]
+        # Create credentials via homeassistant auth provider
+        provider = _async_get_hass_provider(hass)
         await provider.async_initialize()
-        await hass.async_add_executor_job(
-            provider.data.add_auth, username, password
-        )
+        await provider.async_add_auth(username, password)
         credentials = await provider.async_get_or_create_credentials(
             {"username": username}
         )
-        await hass.auth.async_link_user(tenant_user, credentials)
+        await hass.auth.async_link_user(user, credentials)
+
+        # Create person entity if available
+        if "person" in hass.config.components:
+            from homeassistant.components import person  # noqa: PLC0415
+
+            await person.async_create_person(hass, name, user_id=user.id)
 
         # Mark account step as done
+        state = _get_state(hass)
         store = _get_store(hass)
         if "account" not in state.get("steps_done", []):
             state.setdefault("steps_done", []).append("account")
             await store.async_save(state)
 
-        _LOGGER.info("Created tenant user: %s", name)
+        # Return auth_code so frontend can authenticate
+        from homeassistant.components.auth import create_auth_code  # noqa: PLC0415
 
-        return self.json({"status": "ok", "user_id": tenant_user.id})
+        auth_code = create_auth_code(hass, client_id, credentials)
+
+        _LOGGER.info("Created user via greenautarky onboarding: %s", name)
+
+        return self.json({"auth_code": auth_code})
 
 
 # ---------------------------------------------------------------------------
