@@ -14,7 +14,7 @@ on:
 env:
   IMAGE: ghcr.io/greenautarky/tinker-homeassistant
   BASE_IMAGE: ghcr.io/home-assistant/armv7-homeassistant-base:2025.10.1
-  HA_VERSION: "2025.11.3"
+  HA_VERSION: "2025.11.3.1"
   FRONTEND_REPO: greenautarky/frontend
   FRONTEND_BRANCH: ga/custom-onboarding
 
