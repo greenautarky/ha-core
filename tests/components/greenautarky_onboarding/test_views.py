@@ -262,6 +262,296 @@ class TestCreateUserView:
         assert not created[0].is_admin
 
 
+    async def test_create_user_with_email_as_username(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test user creation with an email address as username (email mode)."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "thomas",
+                "username": "thomas@greenautarky.com",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        assert resp.status == HTTPStatus.OK
+
+        data = await resp.json()
+        assert "auth_code" in data
+
+        # Verify the user was created with the email as username
+        users = await hass.auth.async_get_users()
+        created = [u for u in users if u.name == "thomas"]
+        assert len(created) == 1
+        assert not created[0].is_admin
+
+    async def test_create_user_with_plain_username(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test user creation with a plain username (no email, username mode)."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "kibutler-user",
+                "username": "kibutler-user",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        assert resp.status == HTTPStatus.OK
+
+        data = await resp.json()
+        assert "auth_code" in data
+
+        # Verify user was created with name matching username
+        users = await hass.auth.async_get_users()
+        created = [u for u in users if u.name == "kibutler-user"]
+        assert len(created) == 1
+        assert not created[0].is_admin
+
+    async def test_create_user_empty_password(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test user creation fails with empty password."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "Test User",
+                "username": "testuser",
+                "password": "",
+                "language": "de",
+            },
+        )
+        assert resp.status == HTTPStatus.BAD_REQUEST
+
+    async def test_create_user_empty_username(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test user creation fails with empty username."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "Test User",
+                "username": "",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        assert resp.status == HTTPStatus.BAD_REQUEST
+
+    async def test_create_user_empty_name(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test user creation fails with empty name."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "",
+                "username": "testuser",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        assert resp.status == HTTPStatus.BAD_REQUEST
+
+    async def test_create_user_empty_client_id(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test user creation fails with empty client_id."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "",
+                "name": "Test User",
+                "username": "testuser",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        assert resp.status == HTTPStatus.BAD_REQUEST
+
+    async def test_create_user_whitespace_only_fields(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test user creation fails when fields are whitespace-only (stripped)."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "   ",
+                "username": "   ",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        assert resp.status == HTTPStatus.BAD_REQUEST
+
+    async def test_create_user_default_language(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test user creation succeeds without explicit language (defaults to de)."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "Lang User",
+                "username": "languser",
+                "password": "SecurePass1!",
+            },
+        )
+        assert resp.status == HTTPStatus.OK
+        data = await resp.json()
+        assert "auth_code" in data
+
+    async def test_create_user_auth_code_is_unique(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test that each user creation returns a unique auth_code."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp1 = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "User One",
+                "username": "userone",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        data1 = await resp1.json()
+
+        # Reset to allow second creation
+        hass.data[DOMAIN]["state"]["steps_done"] = []
+
+        resp2 = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "User Two",
+                "username": "usertwo",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        data2 = await resp2.json()
+
+        assert data1["auth_code"] != data2["auth_code"]
+
+    async def test_create_two_users_different_modes(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test creating users with both email and plain username yields distinct users."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        # First user: email mode
+        resp1 = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "emailuser",
+                "username": "emailuser@example.com",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        assert resp1.status == HTTPStatus.OK
+
+        # Reset steps_done so we can create another user
+        hass.data[DOMAIN]["state"]["steps_done"] = []
+
+        # Second user: username mode
+        resp2 = await client.post(
+            "/api/greenautarky_onboarding/create_user",
+            json={
+                "client_id": "http://localhost:8123/",
+                "name": "plainuser",
+                "username": "plainuser",
+                "password": "SecurePass1!",
+                "language": "de",
+            },
+        )
+        assert resp2.status == HTTPStatus.OK
+
+        # Both users exist
+        users = await hass.auth.async_get_users()
+        names = {u.name for u in users}
+        assert "emailuser" in names
+        assert "plainuser" in names
+
+
 class TestCompleteView:
     """Tests for POST /api/greenautarky_onboarding/complete."""
 
