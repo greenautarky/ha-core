@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -596,6 +596,313 @@ class TestCompleteView:
 
         resp = await client.post("/api/greenautarky_onboarding/complete")
         assert resp.status == HTTPStatus.FORBIDDEN
+
+
+class TestTelemetryView:
+    """Tests for POST /api/greenautarky_onboarding/telemetry."""
+
+    async def test_save_telemetry_preferences(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test saving telemetry preferences records the step."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/telemetry",
+            json={"error_logs": True, "metrics": False},
+        )
+        assert resp.status == HTTPStatus.OK
+
+        state = hass.data[DOMAIN]["state"]
+        assert "telemetry" in state["steps_done"]
+
+    async def test_telemetry_forwarded_to_integration(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test telemetry prefs are forwarded to greenautarky_telemetry data store."""
+        await _setup_component(hass, hass_storage, default_state)
+
+        # Simulate greenautarky_telemetry being loaded
+        tel_store = MagicMock()
+        tel_store.async_save = AsyncMock()
+        tel_prefs = {"error_logs": False, "metrics": False}
+        hass.data["greenautarky_telemetry"] = {
+            "preferences": tel_prefs,
+            "store": tel_store,
+        }
+
+        client = await hass_client()
+        resp = await client.post(
+            "/api/greenautarky_onboarding/telemetry",
+            json={"error_logs": True, "metrics": True},
+        )
+        assert resp.status == HTTPStatus.OK
+
+        assert tel_prefs["error_logs"] is True
+        assert tel_prefs["metrics"] is True
+        tel_store.async_save.assert_called_once_with(tel_prefs)
+
+    async def test_telemetry_without_integration(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test telemetry works when greenautarky_telemetry is not loaded."""
+        await _setup_component(hass, hass_storage, default_state)
+        # Do NOT set hass.data["greenautarky_telemetry"]
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/telemetry",
+            json={"error_logs": True, "metrics": False},
+        )
+        assert resp.status == HTTPStatus.OK
+
+        state = hass.data[DOMAIN]["state"]
+        assert "telemetry" in state["steps_done"]
+
+    async def test_telemetry_rejected_when_completed(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Test telemetry endpoint returns 403 when onboarding completed."""
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "account", "complete"],
+            "consents": {"gdpr": {"version": 1, "accepted_at": "2026-01-01"}},
+        }
+        await _setup_component(hass, hass_storage, state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/telemetry",
+            json={"error_logs": True, "metrics": True},
+        )
+        assert resp.status == HTTPStatus.FORBIDDEN
+
+
+class TestConsentViews:
+    """Tests for consent HTTP endpoints (authenticated, post-onboarding)."""
+
+    async def test_consent_page_serves_html(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test GET /greenautarky-consent serves HTML page."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/greenautarky-consent")
+        assert resp.status == HTTPStatus.OK
+        assert "text/html" in resp.content_type
+
+    async def test_consent_status_returns_outdated(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Test consent status lists outdated consents."""
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "complete"],
+            "consents": {},  # No consent versions → all outdated
+        }
+        await _setup_component(hass, hass_storage, state)
+        client = await hass_client()
+
+        resp = await client.get("/api/greenautarky_onboarding/consent/status")
+        assert resp.status == HTTPStatus.OK
+
+        data = await resp.json()
+        assert "gdpr" in data["outdated"]
+
+    async def test_consent_status_current(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Test consent status returns empty outdated when all current."""
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "complete"],
+            "consents": {"gdpr": {"version": 1, "accepted_at": "2026-01-01"}},
+        }
+        await _setup_component(hass, hass_storage, state)
+        client = await hass_client()
+
+        resp = await client.get("/api/greenautarky_onboarding/consent/status")
+        assert resp.status == HTTPStatus.OK
+
+        data = await resp.json()
+        assert data["outdated"] == []
+
+    async def test_consent_accept_records(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Test accepting a consent type records it in state."""
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "complete"],
+            "consents": {},
+        }
+        await _setup_component(hass, hass_storage, state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/consent/accept",
+            json={"type": "gdpr"},
+        )
+        assert resp.status == HTTPStatus.OK
+
+        onboarding_state = hass.data[DOMAIN]["state"]
+        assert "gdpr" in onboarding_state["consents"]
+        assert onboarding_state["consents"]["gdpr"]["version"] == 1
+
+    async def test_consent_accept_unknown_type(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Test accepting unknown consent type returns 400."""
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "complete"],
+            "consents": {},
+        }
+        await _setup_component(hass, hass_storage, state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/consent/accept",
+            json={"type": "bogus"},
+        )
+        assert resp.status == HTTPStatus.BAD_REQUEST
+
+    async def test_consent_accept_missing_type(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Test accepting consent with missing type field returns 400."""
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "complete"],
+            "consents": {},
+        }
+        await _setup_component(hass, hass_storage, state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/consent/accept",
+            json={},
+        )
+        assert resp.status == HTTPStatus.BAD_REQUEST
+
+
+class TestStorageMigration:
+    """Tests for v1→v2 storage migration."""
+
+    async def test_v1_to_v2_with_gdpr_accepted(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+    ) -> None:
+        """v1 state with gdpr_accepted=True → adds consents.gdpr."""
+        from homeassistant.components.greenautarky_onboarding import (
+            _migrate_v1_to_v2,
+        )
+
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "complete"],
+        }
+        result = _migrate_v1_to_v2(state)
+        assert "consents" in result
+        assert "gdpr" in result["consents"]
+        assert result["consents"]["gdpr"]["version"] == 1
+        assert result["consents"]["gdpr"]["accepted_at"] == "migrated-from-v1"
+
+    async def test_v1_to_v2_without_gdpr(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+    ) -> None:
+        """v1 state with gdpr_accepted=False → adds empty consents."""
+        from homeassistant.components.greenautarky_onboarding import (
+            _migrate_v1_to_v2,
+        )
+
+        state = {
+            "completed": False,
+            "gdpr_accepted": False,
+            "steps_done": [],
+        }
+        result = _migrate_v1_to_v2(state)
+        assert "consents" in result
+        assert result["consents"] == {}
+
+    async def test_setup_with_v1_storage_triggers_migration(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+    ) -> None:
+        """Component setup with v1 storage (no consents key) → migrates."""
+        from homeassistant.components.greenautarky_onboarding.const import (
+            STORAGE_KEY,
+        )
+
+        # v1 storage: no consents key
+        hass_storage[STORAGE_KEY] = {
+            "version": 2,
+            "data": {
+                "completed": True,
+                "gdpr_accepted": True,
+                "steps_done": ["gdpr", "complete"],
+                # no "consents" key
+            },
+        }
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding._async_register_panel"
+        ):
+            assert await async_setup_component(
+                hass, DOMAIN, {DOMAIN: {}}
+            )
+        await hass.async_block_till_done()
+
+        state = hass.data[DOMAIN]["state"]
+        assert "consents" in state
+        assert "gdpr" in state["consents"]
 
 
 class TestPageView:

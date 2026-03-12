@@ -206,3 +206,44 @@ async def test_ws_set_disable(
     assert msg["success"]
     assert msg["result"]["error_logs"] is False
     assert msg["result"]["metrics"] is True
+
+
+async def test_ws_set_empty_message_succeeds(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    """Test set with no preference fields keeps existing values."""
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+    client = await hass_ws_client(hass)
+
+    # Set with no fields — should succeed and return current defaults
+    await client.send_json({"id": 1, "type": "greenautarky_telemetry/set"})
+    msg = await client.receive_json()
+
+    assert msg["success"]
+    assert msg["result"]["error_logs"] is False
+    assert msg["result"]["metrics"] is False
+
+
+async def test_ws_get_after_restart_with_storage(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: WebSocketGenerator,
+) -> None:
+    """Test preferences survive component reload (loaded from storage)."""
+    hass_storage[STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "data": {"error_logs": True, "metrics": False},
+    }
+
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": "greenautarky_telemetry/get"})
+    msg = await client.receive_json()
+
+    assert msg["success"]
+    assert msg["result"]["error_logs"] is True
+    assert msg["result"]["metrics"] is False
