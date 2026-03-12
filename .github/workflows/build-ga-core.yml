@@ -47,11 +47,11 @@ jobs:
 
       - name: Run GA onboarding tests
         run: |
-          python -m pytest tests/components/greenautarky_onboarding/ -v --tb=short
+          python -m pytest tests/components/greenautarky_onboarding/ -v --tb=short -p no:aiohttp
 
       - name: Run GA telemetry tests
         run: |
-          python -m pytest tests/components/greenautarky_telemetry/ -v --tb=short
+          python -m pytest tests/components/greenautarky_telemetry/ -v --tb=short -p no:aiohttp
 
   build:
     name: Build and push custom HA Core
