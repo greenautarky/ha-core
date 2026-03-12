@@ -426,6 +426,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         ("sw-legacy.js.map", False),
         ("robots.txt", False),
         ("onboarding.html", not is_dev),
+        ("greenautarky-setup.html", not is_dev),
         ("static", not is_dev),
         ("frontend_latest", not is_dev),
         ("frontend_es5", not is_dev),
@@ -694,7 +695,8 @@ class IndexView(web_urldispatcher.AbstractResource):
         ga_onboarding = hass.data.get("greenautarky_onboarding")
         if ga_onboarding and not ga_onboarding["state"].get("completed"):
             return web.Response(
-                status=302, headers={"location": "/greenautarky-setup"}
+                status=302,
+                headers={"location": "/greenautarky-setup.html"},
             )
 
         template = self._template_cache or await hass.async_add_executor_job(

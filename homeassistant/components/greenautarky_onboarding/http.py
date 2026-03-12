@@ -34,7 +34,6 @@ def _async_get_hass_provider(hass: HomeAssistant) -> HassAuthProvider:
     raise RuntimeError("Home Assistant auth provider not found")
 
 # Load HTML templates once at import time
-_PAGE_HTML = (Path(__file__).parent / "page.html").read_text(encoding="utf-8")
 _CONSENT_HTML = (Path(__file__).parent / "consent_page.html").read_text(encoding="utf-8")
 
 
@@ -59,20 +58,23 @@ def _check_not_completed(hass: HomeAssistant) -> web.Response | None:
 
 
 class GAOnboardingPageView(HomeAssistantView):
-    """Serve the standalone onboarding wizard page."""
+    """Redirect to the built greenautarky-setup.html page.
+
+    The actual HTML is built by the frontend build pipeline and served as a
+    static file by the frontend component (just like onboarding.html).
+    """
 
     url = "/greenautarky-setup"
     name = "greenautarky_onboarding:page"
     requires_auth = False
 
     async def get(self, request: web.Request) -> web.Response:
-        """Serve the onboarding wizard HTML page."""
+        """Redirect to the built frontend page."""
         hass: HomeAssistant = request.app["hass"]
         state = _get_state(hass)
         if state.get("completed"):
-            # Redirect to dashboard if already done
             raise web.HTTPFound("/")
-        return web.Response(text=_PAGE_HTML, content_type="text/html")
+        raise web.HTTPFound("/greenautarky-setup.html")
 
 
 class GAOnboardingStatusView(HomeAssistantView):

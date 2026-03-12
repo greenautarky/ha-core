@@ -1,8 +1,9 @@
 """Integration for greenautarky post-onboarding setup wizard.
 
-Serves a standalone unauthenticated page at /greenautarky-setup AND registers
-a HA panel so the wizard is accessible from the mobile app too.
-In tenant mode, also handles account creation.
+Phase 2 onboarding: the built frontend Lit panel is served at
+/greenautarky-setup.html (like stock onboarding.html). A sidebar panel
+is also registered so the wizard is accessible from the mobile app.
+Handles user account creation, GDPR consent, and analytics preferences.
 
 After onboarding, manages consent re-confirmation via HA repairs system.
 """

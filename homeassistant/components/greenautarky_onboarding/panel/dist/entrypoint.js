@@ -10,7 +10,7 @@ class GaOnboardingPanel extends HTMLElement {
         :host { display: block; height: 100vh; }
         iframe { width: 100%; height: 100%; border: none; }
       </style>
-      <iframe src="/greenautarky-setup"></iframe>
+      <iframe src="/greenautarky-setup.html"></iframe>
     `;
   }
 

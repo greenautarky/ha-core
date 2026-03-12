@@ -601,20 +601,20 @@ class TestCompleteView:
 class TestPageView:
     """Tests for GET /greenautarky-setup."""
 
-    async def test_page_serves_html_when_not_completed(
+    async def test_page_redirects_to_built_html_when_not_completed(
         self,
         hass: HomeAssistant,
         hass_storage: dict[str, Any],
         hass_client: ClientSessionGenerator,
         default_state: dict[str, Any],
     ) -> None:
-        """Test setup page is served when not completed."""
+        """Test /greenautarky-setup redirects to the built Lit panel HTML."""
         await _setup_component(hass, hass_storage, default_state)
         client = await hass_client()
 
         resp = await client.get("/greenautarky-setup", allow_redirects=False)
-        assert resp.status == HTTPStatus.OK
-        assert "text/html" in resp.content_type
+        assert resp.status == HTTPStatus.FOUND
+        assert resp.headers["Location"] == "/greenautarky-setup.html"
 
     async def test_page_redirects_when_completed(
         self,
