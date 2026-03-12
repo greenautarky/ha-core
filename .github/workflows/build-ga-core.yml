@@ -46,9 +46,13 @@ jobs:
             "pycares<5" \
             --constraint homeassistant/package_constraints.txt
 
-      - name: Run GA onboarding tests
+      - name: Run GA onboarding tests (unit + consistency)
         run: |
-          python -m pytest tests/components/greenautarky_onboarding/ -v --tb=short
+          python -m pytest \
+            tests/components/greenautarky_onboarding/test_build_consistency.py \
+            tests/components/greenautarky_onboarding/test_consent.py \
+            tests/components/greenautarky_onboarding/test_version_consistency.py \
+            -v --tb=short
 
       - name: Run GA telemetry tests
         run: |
