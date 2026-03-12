@@ -19,9 +19,40 @@ env:
   FRONTEND_BRANCH: ga/custom-onboarding
 
 jobs:
+  test:
+    name: Run GA component tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout core
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: |
+          pip install -e ".[test]" 2>/dev/null || pip install -e . || true
+          pip install pytest pytest-asyncio pytest-aiohttp
+          pip install -r requirements_test.txt 2>/dev/null || true
+          pip install -r requirements.txt 2>/dev/null || true
+
+      - name: Run GA onboarding tests
+        run: |
+          python -m pytest tests/components/greenautarky_onboarding/ -v --tb=short
+
+      - name: Run GA telemetry tests
+        run: |
+          python -m pytest tests/components/greenautarky_telemetry/ -v --tb=short
+
   build:
     name: Build and push custom HA Core
     runs-on: ubuntu-latest
+    needs: test
     permissions:
       contents: read
       packages: write
