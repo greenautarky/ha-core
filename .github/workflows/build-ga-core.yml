@@ -85,8 +85,26 @@ jobs:
           python3 -m build
           cp dist/home_assistant_frontend-*.whl "$GITHUB_WORKSPACE/"
 
-      - name: Verify frontend wheel
-        run: ls -la home_assistant_frontend-*.whl
+      - name: Verify frontend wheel contains GA pages
+        run: |
+          ls -la home_assistant_frontend-*.whl
+          WHEEL=$(ls home_assistant_frontend-*.whl)
+          echo "Checking wheel contents: $WHEEL"
+          EXPECTED="authorize.html index.html onboarding.html greenautarky-setup.html"
+          MISSING=0
+          for page in $EXPECTED; do
+            if unzip -l "$WHEEL" | grep -q "$page"; then
+              echo "  OK: $page found in wheel"
+            else
+              echo "::error::$page MISSING from frontend wheel!"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+          if [ "$MISSING" -gt 0 ]; then
+            echo "::error::$MISSING required page(s) missing from frontend wheel. Check frontend build."
+            exit 1
+          fi
+          echo "All expected pages verified in wheel."
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
