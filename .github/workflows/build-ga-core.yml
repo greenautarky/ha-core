@@ -191,3 +191,38 @@ jobs:
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:landingpage
             ${{ env.IMAGE }}:${{ env.HA_VERSION }}
+
+      - name: Verify GA frontend in built image
+        run: |
+          echo "Pulling built image to verify frontend content..."
+          docker pull --platform linux/arm/v7 ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+
+          # Create container without running (no QEMU needed)
+          docker create --platform linux/arm/v7 --name verify-fe \
+            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }} true
+          FILE_LIST=$(docker export verify-fe | tar tf -)
+          docker rm verify-fe
+
+          ERRORS=0
+
+          # BLD-FE-01: greenautarky-setup.html must exist
+          if echo "$FILE_LIST" | grep -q "greenautarky-setup.html"; then
+            echo "  OK: greenautarky-setup.html found in image"
+          else
+            echo "::error::BLD-FE-01: greenautarky-setup.html NOT found in core image!"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          # BLD-FE-02: greenautarky-setup JS bundle must exist
+          if echo "$FILE_LIST" | grep -qE "greenautarky-setup.*\.js"; then
+            echo "  OK: greenautarky-setup JS bundle found in image"
+          else
+            echo "::error::BLD-FE-02: greenautarky-setup JS bundle NOT found in core image!"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if [ "$ERRORS" -gt 0 ]; then
+            echo "::error::GA frontend verification failed. The local wheel was likely overwritten by PyPI."
+            exit 1
+          fi
+          echo "GA frontend verification passed."
