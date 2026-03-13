@@ -48,8 +48,8 @@ RUN \
     if ls homeassistant/home_assistant_*.whl 1> /dev/null 2>&1; then \
         uv pip install homeassistant/home_assistant_*.whl; \
         grep -v 'home-assistant-frontend' homeassistant/requirements_all.txt \
-            | grep -v 'home-assistant-intents' > /tmp/requirements_filtered.txt; \
-        uv pip install --no-build -r /tmp/requirements_filtered.txt; \
+            | grep -v 'home-assistant-intents' > homeassistant/requirements_filtered.txt; \
+        uv pip install --no-build -r homeassistant/requirements_filtered.txt; \
     else \
         uv pip install --no-build -r homeassistant/requirements_all.txt; \
     fi
