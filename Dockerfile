@@ -47,10 +47,12 @@ COPY requirements_all.txt home_assistant_frontend-* home_assistant_intents-* hom
 RUN \
     if ls homeassistant/home_assistant_*.whl 1> /dev/null 2>&1; then \
         uv pip install homeassistant/home_assistant_*.whl; \
-    fi \
-    && uv pip install \
-        --no-build \
-        -r homeassistant/requirements_all.txt
+        grep -v 'home-assistant-frontend' homeassistant/requirements_all.txt \
+            | grep -v 'home-assistant-intents' > /tmp/requirements_filtered.txt; \
+        uv pip install --no-build -r /tmp/requirements_filtered.txt; \
+    else \
+        uv pip install --no-build -r homeassistant/requirements_all.txt; \
+    fi
 
 ## Setup Home Assistant Core
 COPY . homeassistant/
