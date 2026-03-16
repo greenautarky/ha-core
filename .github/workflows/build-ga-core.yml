@@ -207,7 +207,8 @@ jobs:
 
       - name: Verify GA frontend in built image
         run: |
-          docker pull ${{ env.IMAGE }}:ci-${{ github.sha }}
+          # Pull with ARM platform explicitly — the image is arm/v7 only
+          docker pull --platform linux/arm/v7 ${{ env.IMAGE }}:ci-${{ github.sha }}
           docker create --name verify-fe ${{ env.IMAGE }}:ci-${{ github.sha }} true
           FILE_LIST=$(docker export verify-fe | tar tf -)
           docker rm verify-fe
@@ -407,7 +408,7 @@ jobs:
 
       - name: Pull staging image and promote to final tags
         run: |
-          docker pull ${{ env.IMAGE }}:ci-${{ github.sha }}
+          docker pull --platform linux/arm/v7 ${{ env.IMAGE }}:ci-${{ github.sha }}
 
           docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
           docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:latest
