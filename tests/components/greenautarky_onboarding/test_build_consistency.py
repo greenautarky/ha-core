@@ -83,7 +83,11 @@ class TestEndpointConsistency:
             )
 
     def test_all_onboarding_endpoints_unauthenticated(self) -> None:
-        """Onboarding endpoints must be unauthenticated (user has no account yet)."""
+        """Onboarding endpoints must be unauthenticated (user has no account yet).
+
+        Exception: GAOnboardingResetView requires admin auth — it is a QA/admin
+        utility, not part of the customer-facing wizard flow.
+        """
         http_py = GA_COMPONENT / "http.py"
         content = http_py.read_text()
         # Find all GA onboarding view classes (not consent views)
@@ -94,8 +98,12 @@ class TestEndpointConsistency:
         assert len(onboarding_views) >= 4, (
             f"Expected at least 4 onboarding views, found {len(onboarding_views)}"
         )
-        # Each onboarding view must have requires_auth = False
+        # Authenticated-by-design views (admin/bearer token required)
+        authenticated_by_design = {"GAOnboardingResetView"}
+        # Each onboarding wizard view must have requires_auth = False
         for view in onboarding_views:
+            if view in authenticated_by_design:
+                continue
             # Find the class block
             pattern = rf"class {view}\(HomeAssistantView\).*?requires_auth\s*=\s*(\w+)"
             match = re.search(pattern, content, re.DOTALL)
