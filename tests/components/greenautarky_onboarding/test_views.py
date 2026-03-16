@@ -900,6 +900,8 @@ class TestStorageMigration:
             },
         }
 
+        hass.config.components.add("frontend")
+        hass.config.components.add("panel_custom")
         with patch(
             "homeassistant.components.greenautarky_onboarding._async_register_panel"
         ):
