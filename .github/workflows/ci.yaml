@@ -535,7 +535,7 @@ jobs:
           python --version
           uv pip freeze >> pip_freeze.txt
       - name: Upload pip_freeze artifact
-        uses: &actions-upload-artifact actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: &actions-upload-artifact actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: pip-freeze-${{ matrix.python-version }}
           path: pip_freeze.txt
