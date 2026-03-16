@@ -168,11 +168,12 @@ jobs:
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build and push
+      - name: Build image (no push)
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: false
+          load: true
           no-cache: true
           platforms: linux/arm/v7
           build-args: |
@@ -186,20 +187,11 @@ jobs:
             org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
             org.opencontainers.image.title=Home Assistant Core (greenautarky)
             org.opencontainers.image.source=https://github.com/greenautarky/ha-core
-          tags: |
-            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:landingpage
-            ${{ env.IMAGE }}:${{ env.HA_VERSION }}
+          tags: ${{ env.IMAGE }}:verify
 
       - name: Verify GA frontend in built image
         run: |
-          echo "Pulling built image to verify frontend content..."
-          docker pull --platform linux/arm/v7 ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
-
-          # Create container without running (no QEMU needed)
-          docker create --platform linux/arm/v7 --name verify-fe \
-            ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }} true
+          docker create --name verify-fe ${{ env.IMAGE }}:verify true
           FILE_LIST=$(docker export verify-fe | tar tf -)
           docker rm verify-fe
 
@@ -226,3 +218,14 @@ jobs:
             exit 1
           fi
           echo "GA frontend verification passed."
+
+      - name: Push to GHCR
+        run: |
+          docker tag ${{ env.IMAGE }}:verify ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          docker tag ${{ env.IMAGE }}:verify ${{ env.IMAGE }}:latest
+          docker tag ${{ env.IMAGE }}:verify ${{ env.IMAGE }}:landingpage
+          docker tag ${{ env.IMAGE }}:verify ${{ env.IMAGE }}:${{ env.HA_VERSION }}
+          docker push ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          docker push ${{ env.IMAGE }}:latest
+          docker push ${{ env.IMAGE }}:landingpage
+          docker push ${{ env.IMAGE }}:${{ env.HA_VERSION }}
