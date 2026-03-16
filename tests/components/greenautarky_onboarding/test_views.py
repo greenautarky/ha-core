@@ -942,3 +942,114 @@ class TestPageView:
         resp = await client.get("/greenautarky-setup", allow_redirects=False)
         assert resp.status == HTTPStatus.FOUND
         assert resp.headers["Location"] == "/"
+
+
+class TestResetView:
+    """Tests for POST /api/greenautarky_onboarding/reset.
+
+    The reset endpoint is used by the ga-flasher (stage 90) to re-run the
+    GA onboarding wizard on a provisioned device without reflashing.
+    It requires admin authentication.
+    """
+
+    async def test_reset_clears_onboarding_state(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Test reset clears completed state and steps, preserves consents."""
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "account", "telemetry", "complete"],
+            "consents": {"gdpr": {"version": 1, "accepted_at": "2026-01-01"}},
+        }
+        await _setup_component(hass, hass_storage, state)
+        client = await hass_client()
+
+        resp = await client.post("/api/greenautarky_onboarding/reset")
+        assert resp.status == HTTPStatus.OK
+        data = await resp.json()
+        assert data["status"] == "ok"
+
+        # State is reset
+        current = hass.data[DOMAIN]["state"]
+        assert current["completed"] is False
+        assert current["gdpr_accepted"] is False
+        assert current["steps_done"] == []
+        # Consents are preserved
+        assert "gdpr" in current["consents"]
+
+    async def test_reset_allows_onboarding_to_run_again(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Test that after reset, onboarding endpoints accept requests again."""
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["complete"],
+            "consents": {},
+        }
+        await _setup_component(hass, hass_storage, state)
+        client = await hass_client()
+
+        # GDPR endpoint is blocked while completed
+        resp = await client.post(
+            "/api/greenautarky_onboarding/gdpr", json={"accepted": True}
+        )
+        assert resp.status == HTTPStatus.FORBIDDEN
+
+        # Reset
+        resp = await client.post("/api/greenautarky_onboarding/reset")
+        assert resp.status == HTTPStatus.OK
+
+        # GDPR endpoint works again
+        resp = await client.post(
+            "/api/greenautarky_onboarding/gdpr", json={"accepted": True}
+        )
+        assert resp.status == HTTPStatus.OK
+
+    async def test_reset_requires_auth(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client_no_auth: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test reset returns 401 without authentication."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client_no_auth()
+
+        resp = await client.post("/api/greenautarky_onboarding/reset")
+        assert resp.status == HTTPStatus.UNAUTHORIZED
+
+    async def test_reset_requires_admin(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        hass_access_token: str,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test reset returns 403 for non-admin users."""
+        from homeassistant.auth.const import GROUP_ID_USER
+
+        await _setup_component(hass, hass_storage, default_state)
+
+        # Create a non-admin user and get their token
+        user_group = await hass.auth.async_get_group(GROUP_ID_USER)
+        from tests.common import MockUser
+
+        regular_user = MockUser(groups=[user_group]).add_to_hass(hass)
+        refresh_token = await hass.auth.async_create_refresh_token(
+            regular_user, "http://localhost/"
+        )
+        user_token = hass.auth.async_create_access_token(refresh_token)
+
+        client = await hass_client(user_token)
+        resp = await client.post("/api/greenautarky_onboarding/reset")
+        assert resp.status == HTTPStatus.FORBIDDEN

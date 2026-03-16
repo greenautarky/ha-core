@@ -252,6 +252,55 @@ class GAOnboardingCreateUserView(HomeAssistantView):
 
 
 # ---------------------------------------------------------------------------
+# Test/QA reset endpoint (admin-authenticated)
+# ---------------------------------------------------------------------------
+
+
+class GAOnboardingResetView(HomeAssistantView):
+    """Reset GA onboarding state to allow re-running the wizard.
+
+    Intended for QA and automated testing (e.g. ga-flasher stage 90).
+    Requires admin authentication — the ga-flasher uses the admin token
+    obtained during Phase 1 provisioning to call this endpoint.
+
+    Resets: completed, gdpr_accepted, steps_done.
+    Preserves: consents (version-tracked separately).
+    """
+
+    url = "/api/greenautarky_onboarding/reset"
+    name = "api:greenautarky_onboarding:reset"
+    requires_auth = True
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Reset onboarding state."""
+        hass: HomeAssistant = request.app["hass"]
+
+        # Require admin
+        user = request["hass_user"]
+        if not user.is_admin:
+            return web.json_response({"message": "Admin required"}, status=403)
+
+        state = _get_state(hass)
+        store = _get_store(hass)
+
+        # Reset wizard state, preserve consents
+        state["completed"] = False
+        state["gdpr_accepted"] = False
+        state["steps_done"] = []
+        await store.async_save(state)
+
+        # Re-register the sidebar panel (removed on completion)
+        from homeassistant.components.greenautarky_onboarding import (  # noqa: PLC0415
+            _async_register_panel,
+        )
+
+        await _async_register_panel(hass)
+
+        _LOGGER.info("greenautarky onboarding state reset by %s", user.name)
+        return self.json({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
 # Consent views (authenticated — for post-onboarding consent re-confirmation)
 # ---------------------------------------------------------------------------
 

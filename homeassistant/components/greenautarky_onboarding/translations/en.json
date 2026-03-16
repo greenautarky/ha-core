@@ -1,0 +1,16 @@
+{
+  "issues": {
+    "consent_outdated_gdpr": {
+      "title": "Datenschutzerklaerung aktualisiert",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Datenschutzerklaerung ueberpruefen",
+            "description": "Unsere Datenschutzerklaerung wurde aktualisiert. Bitte ueberprüfe und bestaetige die Aenderungen."
+          }
+        }
+      },
+      "description": "Unsere Datenschutzerklaerung wurde aktualisiert. Bitte ueberprüfe und bestaetige die Aenderungen unter **Einstellungen > Reparaturen**."
+    }
+  }
+}

@@ -30,6 +30,7 @@ from .http import (
     GAOnboardingCreateUserView,
     GAOnboardingGDPRView,
     GAOnboardingPageView,
+    GAOnboardingResetView,
     GAOnboardingStatusView,
     GAOnboardingTelemetryView,
 )
@@ -85,6 +86,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(GAOnboardingTelemetryView())
     hass.http.register_view(GAOnboardingCompleteView())
     hass.http.register_view(GAOnboardingCreateUserView())
+    hass.http.register_view(GAOnboardingResetView())
 
     # Register consent HTTP views (authenticated, always available)
     hass.http.register_view(GAConsentPageView())
