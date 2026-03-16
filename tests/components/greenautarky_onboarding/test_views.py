@@ -44,6 +44,14 @@ async def _setup_component(
     if state is not None:
         mock_storage(hass_storage, state)
 
+    # Set up the auth component so create_auth_code works in create_user tests.
+    assert await async_setup_component(hass, "auth", {})
+
+    # Mark frontend/panel_custom as already set up so HA does not try to import
+    # hass_frontend (the built wheel, not available in the test environment).
+    hass.config.components.add("frontend")
+    hass.config.components.add("panel_custom")
+
     # Mock panel registration to avoid needing the panel dist directory
     with patch(
         "homeassistant.components.greenautarky_onboarding._async_register_panel"
