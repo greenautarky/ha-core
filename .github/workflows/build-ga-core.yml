@@ -19,6 +19,9 @@ env:
   FRONTEND_BRANCH: ga/custom-onboarding
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Unit + consistency tests — run first, gate everything else
+  # ---------------------------------------------------------------------------
   test:
     name: Run GA component tests
     runs-on: ubuntu-latest
@@ -52,14 +55,20 @@ jobs:
             tests/components/greenautarky_onboarding/test_build_consistency.py \
             tests/components/greenautarky_onboarding/test_consent.py \
             tests/components/greenautarky_onboarding/test_version_consistency.py \
+            tests/components/greenautarky_onboarding/test_views.py \
             -v --tb=short
 
       - name: Run GA telemetry tests
         run: |
           python -m pytest tests/components/greenautarky_telemetry/ -v --tb=short
 
+  # ---------------------------------------------------------------------------
+  # Build ARM image + frontend wheel
+  # Pushes an intermediate :ci-{sha} tag — NOT the final :latest/:landingpage.
+  # The push job (below) promotes to final tags only after e2e passes.
+  # ---------------------------------------------------------------------------
   build:
-    name: Build and push custom HA Core
+    name: Build custom HA Core image
     runs-on: ubuntu-latest
     needs: test
     permissions:
@@ -127,9 +136,8 @@ jobs:
 
       - name: Verify frontend wheel contains GA pages
         run: |
-          ls -la home_assistant_frontend-*.whl
           WHEEL=$(ls home_assistant_frontend-*.whl)
-          echo "Checking wheel contents: $WHEEL"
+          echo "Checking wheel: $WHEEL"
           EXPECTED="authorize.html index.html onboarding.html greenautarky-setup.html"
           MISSING=0
           for page in $EXPECTED; do
@@ -141,10 +149,16 @@ jobs:
             fi
           done
           if [ "$MISSING" -gt 0 ]; then
-            echo "::error::$MISSING required page(s) missing from frontend wheel. Check frontend build."
+            echo "::error::$MISSING required page(s) missing. Check frontend build."
             exit 1
           fi
-          echo "All expected pages verified in wheel."
+
+      - name: Upload frontend wheel (for e2e tests)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ga-frontend-wheel
+          path: home_assistant_frontend-*.whl
+          retention-days: 1
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -159,7 +173,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Determine tag
+      - name: Determine final tag
         id: tag
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -168,12 +182,14 @@ jobs:
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build image (no push)
+      - name: Build and push staging image (:ci-{sha})
+        # Pushes an intermediate tag so the promote job can pull it on a
+        # different runner. Final :latest/:landingpage tags are set by the
+        # promote job only after e2e tests pass.
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
-          load: true
+          push: true
           no-cache: true
           platforms: linux/arm/v7
           build-args: |
@@ -187,45 +203,224 @@ jobs:
             org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
             org.opencontainers.image.title=Home Assistant Core (greenautarky)
             org.opencontainers.image.source=https://github.com/greenautarky/ha-core
-          tags: ${{ env.IMAGE }}:verify
+          tags: ${{ env.IMAGE }}:ci-${{ github.sha }}
 
       - name: Verify GA frontend in built image
         run: |
-          docker create --name verify-fe ${{ env.IMAGE }}:verify true
+          docker pull ${{ env.IMAGE }}:ci-${{ github.sha }}
+          docker create --name verify-fe ${{ env.IMAGE }}:ci-${{ github.sha }} true
           FILE_LIST=$(docker export verify-fe | tar tf -)
           docker rm verify-fe
 
           ERRORS=0
 
-          # BLD-FE-01: greenautarky-setup.html must exist
           if echo "$FILE_LIST" | grep -q "greenautarky-setup.html"; then
             echo "  OK: greenautarky-setup.html found in image"
           else
-            echo "::error::BLD-FE-01: greenautarky-setup.html NOT found in core image!"
+            echo "::error::BLD-FE-01: greenautarky-setup.html NOT found in image!"
             ERRORS=$((ERRORS + 1))
           fi
 
-          # BLD-FE-02: greenautarky-setup JS bundle must exist
           if echo "$FILE_LIST" | grep -qE "greenautarky-setup.*\.js"; then
             echo "  OK: greenautarky-setup JS bundle found in image"
           else
-            echo "::error::BLD-FE-02: greenautarky-setup JS bundle NOT found in core image!"
+            echo "::error::BLD-FE-02: greenautarky-setup JS bundle NOT found in image!"
             ERRORS=$((ERRORS + 1))
           fi
 
           if [ "$ERRORS" -gt 0 ]; then
-            echo "::error::GA frontend verification failed. The local wheel was likely overwritten by PyPI."
+            echo "::error::GA frontend verification failed."
             exit 1
           fi
           echo "GA frontend verification passed."
 
-      - name: Push to GHCR
+  # ---------------------------------------------------------------------------
+  # E2E integration tests (Playwright)
+  #
+  # Installs HA from PyPI with the built GA frontend wheel on a native amd64
+  # runner (no QEMU/ARM emulation — keeps tests fast and reliable).
+  # Seeds Phase 1 (admin account via stock onboarding API), then drives the
+  # full 5-step GA onboarding flow through a real browser.
+  #
+  # Gates the promote (push) job — if this fails, :latest is NOT updated.
+  # ---------------------------------------------------------------------------
+  test-e2e:
+    name: E2E — GA onboarding flow (Playwright)
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout core
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Download frontend wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: ga-frontend-wheel
+
+      - name: Install HA with GA frontend wheel
         run: |
-          docker tag ${{ env.IMAGE }}:verify ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
-          docker tag ${{ env.IMAGE }}:verify ${{ env.IMAGE }}:latest
-          docker tag ${{ env.IMAGE }}:verify ${{ env.IMAGE }}:landingpage
-          docker tag ${{ env.IMAGE }}:verify ${{ env.IMAGE }}:${{ env.HA_VERSION }}
+          pip install uv
+          WHEEL=$(ls home_assistant_frontend-*.whl)
+          echo "Installing HA ${{ env.HA_VERSION }} with wheel: $WHEEL"
+          uv pip install --system \
+            "homeassistant==${{ env.HA_VERSION }}" \
+            "$WHEEL" \
+            --constraint homeassistant/package_constraints.txt
+
+      - name: Install Playwright + Chromium
+        run: |
+          npm install -g @playwright/test@^1.50.0
+          npx playwright install chromium --with-deps
+
+      - name: Start HA instance
+        run: |
+          mkdir -p /tmp/ha-config
+          cat > /tmp/ha-config/configuration.yaml << 'HACFG'
+          homeassistant:
+            name: Test Home
+            unit_system: metric
+            time_zone: Europe/Berlin
+          http:
+            server_host: "0.0.0.0"
+            server_port: 8123
+          logger:
+            default: warning
+          HACFG
+
+          hass -c /tmp/ha-config > /tmp/ha.log 2>&1 &
+          echo "HA_PID=$!" >> "$GITHUB_ENV"
+          echo "HA started (PID $!)"
+
+      - name: Wait for HA to be ready
+        run: |
+          echo "Waiting for HA to start..."
+          for i in $(seq 1 90); do
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+                   --connect-timeout 2 http://localhost:8123/api/ 2>/dev/null || echo "000")
+            if [ "$HTTP" != "000" ]; then
+              echo "HA responded HTTP $HTTP after ${i}×2s"
+              break
+            fi
+            [ "$i" -eq 90 ] && { echo "::error::HA never started"; cat /tmp/ha.log; exit 1; }
+            sleep 2
+          done
+
+      - name: Complete stock onboarding (Phase 1 — create admin account)
+        run: |
+          # Create admin user via stock HA onboarding API (unauthenticated)
+          CREATE=$(curl -sf -X POST http://localhost:8123/api/onboarding/users \
+            -H "Content-Type: application/json" \
+            -d '{
+              "client_id": "http://localhost:8123/",
+              "name": "Admin",
+              "username": "admin",
+              "password": "changeme",
+              "language": "en"
+            }')
+          echo "Create user: $CREATE"
+          AUTH_CODE=$(echo "$CREATE" | python3 -c "import sys,json; print(json.load(sys.stdin)['auth_code'])")
+
+          # Exchange auth code for Bearer token
+          TOKEN=$(curl -sf -X POST http://localhost:8123/auth/token \
+            -d "grant_type=authorization_code&code=${AUTH_CODE}&client_id=http://localhost:8123/")
+          ADMIN_TOKEN=$(echo "$TOKEN" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          echo "ADMIN_TOKEN=$ADMIN_TOKEN" >> "$GITHUB_ENV"
+
+          # Complete remaining stock onboarding steps (core_config, analytics, integration)
+          for STEP in core_config analytics integration; do
+            curl -sf -X POST "http://localhost:8123/api/onboarding/${STEP}" \
+              -H "Authorization: Bearer $ADMIN_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"client_id":"http://localhost:8123/"}' 2>/dev/null || true
+          done
+          echo "Phase 1 (stock onboarding) complete."
+
+      - name: Verify GA onboarding page accessible
+        run: |
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" -L http://localhost:8123/greenautarky-setup.html)
+          echo "GA onboarding page: HTTP $HTTP"
+          [ "$HTTP" = "200" ] || { echo "::error::GA onboarding page not accessible (HTTP $HTTP)"; exit 1; }
+
+      - name: Run Playwright e2e tests
+        env:
+          HA_BASE_URL: "http://localhost:8123"
+          HA_USERNAME: "admin"
+          HA_PASSWORD: "changeme"
+        run: |
+          npx playwright test --config tests/e2e/playwright.config.ts
+
+      - name: Show HA log on failure
+        if: failure()
+        run: tail -100 /tmp/ha.log || true
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            tests/e2e/artifacts/
+            tests/e2e/report/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Promote staging image to final tags
+  # Only runs when BOTH build AND test-e2e succeed.
+  # This ensures :latest is never updated with a broken build.
+  # ---------------------------------------------------------------------------
+  promote:
+    name: Promote image to final tags
+    runs-on: ubuntu-latest
+    needs: [build, test-e2e]
+    permissions:
+      packages: write
+
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine final tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pull staging image and promote to final tags
+        run: |
+          docker pull ${{ env.IMAGE }}:ci-${{ github.sha }}
+
+          docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:latest
+          docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:landingpage
+          docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:${{ env.HA_VERSION }}
+
           docker push ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
           docker push ${{ env.IMAGE }}:latest
           docker push ${{ env.IMAGE }}:landingpage
           docker push ${{ env.IMAGE }}:${{ env.HA_VERSION }}
+
+          echo "Image promoted to final tags."
+          echo "  :${{ steps.tag.outputs.tag }}"
+          echo "  :latest"
+          echo "  :landingpage"
+          echo "  :${{ env.HA_VERSION }}"
