@@ -76,6 +76,9 @@ async function getOnboardingStatus(): Promise<Record<string, unknown>> {
  * so we target inputs by their type/autocomplete attributes.
  * Default mode is email: fields are email, password, password_confirm.
  * We switch to username mode first since the test names reference usernames.
+ *
+ * Uses type() instead of fill() to simulate real keystrokes, which
+ * reliably triggers Lit's input event handlers through shadow DOM.
  */
 async function fillUserForm(
   page: Page,
@@ -86,24 +89,32 @@ async function fillUserForm(
 
   // Switch to username mode (default is email)
   await formHost.locator("a.toggle-link").click();
-
-  // Fill username — the first text input after switching
-  const usernameInput = formHost.locator("ha-textfield input[type='text']").first();
-  await usernameInput.waitFor({ state: "attached", timeout: 10_000 });
-  await usernameInput.fill(username);
-
-  // Fill password — first password input
-  const passwordInputs = formHost.locator("ha-textfield input[type='password']");
-  await passwordInputs.first().fill(password);
-
-  // Fill password confirm — second password input
-  await passwordInputs.nth(1).fill(password);
-
-  // Wait a moment for form validation to settle
+  // Wait for Lit to re-render the form with username schema
   await page.waitForTimeout(500);
 
-  // Click submit button ("Konto erstellen")
-  await formHost.locator("ha-button").click();
+  // Target inputs by order within the form: [0]=username, [1]=password, [2]=confirm
+  const inputs = formHost.locator("input");
+  await inputs.nth(0).waitFor({ state: "visible", timeout: 10_000 });
+
+  // Use click + type (keystrokes) to reliably trigger input events in shadow DOM
+  await inputs.nth(0).click();
+  await inputs.nth(0).type(username, { delay: 20 });
+
+  await inputs.nth(1).click();
+  await inputs.nth(1).type(password, { delay: 20 });
+
+  await inputs.nth(2).click();
+  await inputs.nth(2).type(password, { delay: 20 });
+
+  // Wait for password strength computation and form validation to settle
+  await page.waitForTimeout(1000);
+
+  // Verify submit button is enabled before clicking
+  const submitBtn = formHost.locator("ha-button");
+  await expect(submitBtn).not.toHaveAttribute("disabled", "", {
+    timeout: 5_000,
+  });
+  await submitBtn.click();
 }
 
 // ---------------------------------------------------------------------------
