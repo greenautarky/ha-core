@@ -289,8 +289,8 @@ jobs:
 
       - name: Install Playwright + Chromium
         run: |
-          npm install -g @playwright/test@^1.50.0
-          npx playwright install chromium --with-deps
+          cd tests/e2e && npm install
+          npx --prefix tests/e2e playwright install chromium --with-deps
 
       - name: Start HA instance
         run: |
@@ -372,7 +372,7 @@ jobs:
           HA_USERNAME: "admin"
           HA_PASSWORD: "changeme"
         run: |
-          npx playwright test --config tests/e2e/playwright.config.ts
+          npx --prefix tests/e2e playwright test --config tests/e2e/playwright.config.ts
 
       - name: Show HA log on failure
         if: failure()
