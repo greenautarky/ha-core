@@ -30,26 +30,23 @@ const TIMEOUT = 30_000;
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Log in as admin and return a Bearer token. */
+/** Log in as admin and return a Bearer token.
+ *
+ * In CI the token is pre-provisioned by the Phase 1 onboarding step and
+ * stored in the ADMIN_TOKEN environment variable (set via $GITHUB_ENV).
+ * HA does not support grant_type=password, so we rely on the pre-provisioned
+ * token in automated environments.
+ */
 async function getAdminToken(): Promise<string> {
-  // Step 1: get auth code via HA auth flow (programmatic)
-  const tokenResp = await fetch(`${BASE_URL}/auth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "password",
-      client_id: BASE_URL,
-      username: ADMIN_USER,
-      password: ADMIN_PASS,
-    }),
-  });
-  if (!tokenResp.ok) {
-    throw new Error(
-      `Admin login failed: ${tokenResp.status} ${await tokenResp.text()}`
-    );
+  // Use the pre-provisioned token from CI (set by Phase 1 onboarding step)
+  const envToken = process.env.ADMIN_TOKEN ?? process.env.HA_ADMIN_TOKEN;
+  if (envToken) {
+    return envToken;
   }
-  const { access_token } = await tokenResp.json();
-  return access_token;
+  throw new Error(
+    "No admin token available. Set ADMIN_TOKEN or HA_ADMIN_TOKEN environment variable. " +
+      "HA does not support grant_type=password — obtain a token via the auth_code flow."
+  );
 }
 
 /** Reset GA onboarding state so the wizard can run again. */
