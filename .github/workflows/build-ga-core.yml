@@ -282,10 +282,12 @@ jobs:
           # has upstream versions like 2025.11.3, not our 2025.11.3.1 tags.
           # No --constraint flag: package_constraints.txt is for the Docker image
           # build only. The e2e test just needs a working HA instance.
+          # pycares<5: newer pycares breaks aiodns (missing ares_query_a_result).
           echo "Installing HA ${{ env.HA_VERSION_PYPI }} with wheel: $WHEEL"
           uv pip install --system \
             "homeassistant==${{ env.HA_VERSION_PYPI }}" \
-            "$WHEEL"
+            "$WHEEL" \
+            "pycares<5"
 
       - name: Install Playwright + Chromium
         run: |
