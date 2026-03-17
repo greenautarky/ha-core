@@ -148,7 +148,8 @@ test.describe("GA onboarding — full flow", () => {
     await page.locator("ga-setup-welcome").getByRole("button").first().click();
     await expect(page.locator("ga-setup-gdpr")).toBeAttached();
 
-    // Accept GDPR and submit
+    // Check the GDPR acceptance checkbox, then submit
+    await page.locator("ga-setup-gdpr ha-checkbox").click();
     await page.locator("ga-setup-gdpr").getByRole("button").first().click();
 
     // User creation step should be visible
@@ -177,6 +178,7 @@ test.describe("GA onboarding — full flow", () => {
     // Welcome → GDPR → User
     await page.locator("ga-setup-welcome").getByRole("button").first().click();
     await expect(page.locator("ga-setup-gdpr")).toBeAttached();
+    await page.locator("ga-setup-gdpr ha-checkbox").click();
     await page.locator("ga-setup-gdpr").getByRole("button").first().click();
     await expect(page.locator("ga-setup-create-user")).toBeAttached();
 
@@ -221,6 +223,7 @@ test.describe("GA onboarding — full flow", () => {
 
     // 2. GDPR
     await expect(page.locator("ga-setup-gdpr")).toBeAttached();
+    await page.locator("ga-setup-gdpr ha-checkbox").click();
     await page.locator("ga-setup-gdpr").getByRole("button").first().click();
 
     // 3. User creation
@@ -273,6 +276,7 @@ test.describe("GA onboarding — full flow", () => {
     // Welcome → GDPR → User → Info pages → Analytics → Done
     await page.locator("ga-setup-welcome").getByRole("button").first().click();
     await expect(page.locator("ga-setup-gdpr")).toBeAttached();
+    await page.locator("ga-setup-gdpr ha-checkbox").click();
     await page.locator("ga-setup-gdpr").getByRole("button").first().click();
 
     await expect(page.locator("ga-setup-create-user")).toBeAttached();
@@ -344,6 +348,7 @@ test.describe("GA onboarding — reset endpoint", () => {
     await page.goto(ONBOARDING_URL);
     await page.locator("ga-setup-welcome").getByRole("button").first().click();
     await expect(page.locator("ga-setup-gdpr")).toBeAttached();
+    await page.locator("ga-setup-gdpr ha-checkbox").click();
     await page.locator("ga-setup-gdpr").getByRole("button").first().click();
 
     await expect(page.locator("ga-setup-create-user")).toBeAttached();
