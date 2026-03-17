@@ -289,12 +289,16 @@ class GAOnboardingResetView(HomeAssistantView):
         state["steps_done"] = []
         await store.async_save(state)
 
-        # Re-register the sidebar panel (removed on completion)
+        # Re-register the sidebar panel if it was removed on completion.
+        # Skip if already registered (e.g. onboarding was never completed).
+        from homeassistant.components.frontend import DATA_PANELS  # noqa: PLC0415
         from homeassistant.components.greenautarky_onboarding import (  # noqa: PLC0415
+            PANEL_URL_PATH,
             _async_register_panel,
         )
 
-        await _async_register_panel(hass)
+        if PANEL_URL_PATH not in hass.data.get(DATA_PANELS, {}):
+            await _async_register_panel(hass)
 
         _LOGGER.info("greenautarky onboarding state reset by %s", user.name)
         return self.json({"status": "ok"})
