@@ -18,7 +18,7 @@
  *   HA_PASSWORD   — admin password for reset endpoint (default: changeme)
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const BASE_URL = process.env.HA_BASE_URL ?? "http://localhost:8123";
 const ADMIN_USER = process.env.HA_USERNAME ?? "admin";
@@ -69,6 +69,41 @@ async function resetOnboarding(token: string): Promise<void> {
 async function getOnboardingStatus(): Promise<Record<string, unknown>> {
   const resp = await fetch(`${BASE_URL}/api/greenautarky_onboarding/status`);
   return resp.json();
+}
+
+/**
+ * Fill the user creation form. The form uses ha-form with shadow DOM,
+ * so we target inputs by their type/autocomplete attributes.
+ * Default mode is email: fields are email, password, password_confirm.
+ * We switch to username mode first since the test names reference usernames.
+ */
+async function fillUserForm(
+  page: Page,
+  username: string,
+  password: string
+): Promise<void> {
+  const formHost = page.locator("ga-setup-create-user");
+
+  // Switch to username mode (default is email)
+  await formHost.locator("a.toggle-link").click();
+
+  // Fill username — the first text input after switching
+  const usernameInput = formHost.locator("ha-textfield input[type='text']").first();
+  await usernameInput.waitFor({ state: "attached", timeout: 10_000 });
+  await usernameInput.fill(username);
+
+  // Fill password — first password input
+  const passwordInputs = formHost.locator("ha-textfield input[type='password']");
+  await passwordInputs.first().fill(password);
+
+  // Fill password confirm — second password input
+  await passwordInputs.nth(1).fill(password);
+
+  // Wait a moment for form validation to settle
+  await page.waitForTimeout(500);
+
+  // Click submit button ("Konto erstellen")
+  await formHost.locator("ha-button").click();
 }
 
 // ---------------------------------------------------------------------------
@@ -182,15 +217,8 @@ test.describe("GA onboarding — full flow", () => {
     await page.locator("ga-setup-gdpr").getByRole("button").first().click();
     await expect(page.locator("ga-setup-create-user")).toBeAttached();
 
-    // Fill in user form
-    const form = page.locator("ga-setup-create-user");
-    await form.getByLabel(/name/i).fill("Test User");
-    await form.getByLabel(/username/i).fill("testuser");
-    await form.getByLabel(/password/i).first().fill("SecurePassword123!");
-    await form.getByLabel(/confirm/i).fill("SecurePassword123!");
-
-    // Submit user creation
-    await form.getByRole("button", { name: /create|next|weiter/i }).click();
+    // Fill and submit user form
+    await fillUserForm(page, "testuser", "SecurePassword123!");
 
     // Info pages step should appear (after auth is established)
     await expect(page.locator("ga-setup-info-pages")).toBeAttached({
@@ -228,12 +256,7 @@ test.describe("GA onboarding — full flow", () => {
 
     // 3. User creation
     await expect(page.locator("ga-setup-create-user")).toBeAttached();
-    const form = page.locator("ga-setup-create-user");
-    await form.getByLabel(/name/i).fill("E2E User");
-    await form.getByLabel(/username/i).fill("e2euser");
-    await form.getByLabel(/password/i).first().fill("SecurePassword123!");
-    await form.getByLabel(/confirm/i).fill("SecurePassword123!");
-    await form.getByRole("button", { name: /create|next|weiter/i }).click();
+    await fillUserForm(page, "e2euser", "SecurePassword123!");
 
     // 4. Info pages
     await expect(page.locator("ga-setup-info-pages")).toBeAttached({
@@ -280,12 +303,7 @@ test.describe("GA onboarding — full flow", () => {
     await page.locator("ga-setup-gdpr").getByRole("button").first().click();
 
     await expect(page.locator("ga-setup-create-user")).toBeAttached();
-    const form = page.locator("ga-setup-create-user");
-    await form.getByLabel(/name/i).fill("Final User");
-    await form.getByLabel(/username/i).fill("finaluser");
-    await form.getByLabel(/password/i).first().fill("SecurePassword123!");
-    await form.getByLabel(/confirm/i).fill("SecurePassword123!");
-    await form.getByRole("button", { name: /create|next|weiter/i }).click();
+    await fillUserForm(page, "finaluser", "SecurePassword123!");
 
     await expect(page.locator("ga-setup-info-pages")).toBeAttached({
       timeout: 15_000,
@@ -352,12 +370,7 @@ test.describe("GA onboarding — reset endpoint", () => {
     await page.locator("ga-setup-gdpr").getByRole("button").first().click();
 
     await expect(page.locator("ga-setup-create-user")).toBeAttached();
-    const form = page.locator("ga-setup-create-user");
-    await form.getByLabel(/name/i).fill("Reset Test User");
-    await form.getByLabel(/username/i).fill("resetuser");
-    await form.getByLabel(/password/i).first().fill("SecurePassword123!");
-    await form.getByLabel(/confirm/i).fill("SecurePassword123!");
-    await form.getByRole("button", { name: /create|next|weiter/i }).click();
+    await fillUserForm(page, "resetuser", "SecurePassword123!");
 
     await expect(page.locator("ga-setup-info-pages")).toBeAttached({
       timeout: 15_000,
