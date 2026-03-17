@@ -15,6 +15,9 @@ env:
   IMAGE: ghcr.io/greenautarky/tinker-homeassistant
   BASE_IMAGE: ghcr.io/home-assistant/armv7-homeassistant-base:2025.10.1
   HA_VERSION: "2025.11.3.1"
+  # Base HA version on PyPI (without GA revision suffix) — used by the e2e job
+  # to install HA from PyPI. The GA revision (.1, .2 …) is our internal tag only.
+  HA_VERSION_PYPI: "2025.11.3"
   FRONTEND_REPO: greenautarky/frontend
   FRONTEND_BRANCH: ga/custom-onboarding
 
@@ -275,9 +278,11 @@ jobs:
         run: |
           pip install uv
           WHEEL=$(ls home_assistant_frontend-*.whl)
-          echo "Installing HA ${{ env.HA_VERSION }} with wheel: $WHEEL"
+          # Use HA_VERSION_PYPI (base version without GA revision) — PyPI only
+          # has upstream versions like 2025.11.3, not our 2025.11.3.1 tags.
+          echo "Installing HA ${{ env.HA_VERSION_PYPI }} with wheel: $WHEEL"
           uv pip install --system \
-            "homeassistant==${{ env.HA_VERSION }}" \
+            "homeassistant==${{ env.HA_VERSION_PYPI }}" \
             "$WHEEL" \
             --constraint homeassistant/package_constraints.txt
 
