@@ -280,11 +280,12 @@ jobs:
           WHEEL=$(ls home_assistant_frontend-*.whl)
           # Use HA_VERSION_PYPI (base version without GA revision) — PyPI only
           # has upstream versions like 2025.11.3, not our 2025.11.3.1 tags.
+          # No --constraint flag: package_constraints.txt is for the Docker image
+          # build only. The e2e test just needs a working HA instance.
           echo "Installing HA ${{ env.HA_VERSION_PYPI }} with wheel: $WHEEL"
           uv pip install --system \
             "homeassistant==${{ env.HA_VERSION_PYPI }}" \
-            "$WHEEL" \
-            --constraint homeassistant/package_constraints.txt
+            "$WHEEL"
 
       - name: Install Playwright + Chromium
         run: |
