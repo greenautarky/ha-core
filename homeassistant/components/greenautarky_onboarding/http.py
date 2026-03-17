@@ -15,7 +15,10 @@ from typing import Any
 from aiohttp import web
 
 from homeassistant.auth.const import GROUP_ID_USER
-from homeassistant.auth.providers.homeassistant import HassAuthProvider
+from homeassistant.auth.providers.homeassistant import (
+    HassAuthProvider,
+    InvalidUser,
+)
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -222,7 +225,10 @@ class GAOnboardingCreateUserView(HomeAssistantView):
         # Create credentials via homeassistant auth provider
         provider = _async_get_hass_provider(hass)
         await provider.async_initialize()
-        await provider.async_add_auth(username, password)
+        try:
+            await provider.async_add_auth(username, password)
+        except InvalidUser:
+            return self.json_message("Username already exists", status_code=400)
         credentials = await provider.async_get_or_create_credentials(
             {"username": username}
         )

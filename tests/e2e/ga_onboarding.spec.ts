@@ -21,6 +21,8 @@ import { expect, test, type Page } from "@playwright/test";
 const BASE_URL = process.env.HA_BASE_URL ?? "http://localhost:8123";
 const ONBOARDING_URL = `${BASE_URL}/greenautarky-setup.html`;
 const TIMEOUT = 30_000;
+// Unique suffix per run to avoid "username_already_exists" on retry
+const RUN_ID = Date.now().toString(36);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -153,7 +155,7 @@ test.describe.serial("GA onboarding — full flow", () => {
 
     // 1. Welcome → 2. GDPR → 3. User creation
     await navigateToUserStep(page);
-    await createUserAndAdvance(page, "e2euser", "SecurePassword123!");
+    await createUserAndAdvance(page, `e2e_${RUN_ID}`, "SecurePassword123!");
 
     // 4. Info pages
     await expect(page.locator("ga-setup-info-pages")).toBeAttached({
@@ -249,7 +251,7 @@ test.describe.serial("GA onboarding — full flow", () => {
     page.setDefaultTimeout(TIMEOUT);
 
     await navigateToUserStep(page);
-    await createUserAndAdvance(page, "testuser2", "SecurePassword123!");
+    await createUserAndAdvance(page, `test_${RUN_ID}`, "SecurePassword123!");
 
     // Info pages step should appear
     await expect(page.locator("ga-setup-info-pages")).toBeAttached({
