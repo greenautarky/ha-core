@@ -315,10 +315,13 @@ jobs:
         run: |
           echo "Waiting for HA to start..."
           for i in $(seq 1 90); do
+            # curl returns exit 7 (connection refused) when HA is not up yet.
+            # Capture HTTP code separately to avoid || echo "000" appending to
+            # curl's own "000" output (which would produce "000000" != "000").
             HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
-                   --connect-timeout 2 http://localhost:8123/api/ 2>/dev/null || echo "000")
-            if [ "$HTTP" != "000" ]; then
-              echo "HA responded HTTP $HTTP after ${i}×2s"
+                   --connect-timeout 2 http://localhost:8123/api/ 2>/dev/null) || HTTP="000"
+            if [ "${HTTP}" != "000" ]; then
+              echo "HA responded HTTP ${HTTP} after ${i}×2s"
               break
             fi
             [ "$i" -eq 90 ] && { echo "::error::HA never started"; cat /tmp/ha.log; exit 1; }
