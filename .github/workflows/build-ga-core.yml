@@ -278,14 +278,12 @@ jobs:
         run: |
           pip install uv
           WHEEL=$(ls home_assistant_frontend-*.whl)
-          # Use HA_VERSION_PYPI (base version without GA revision) — PyPI only
-          # has upstream versions like 2025.11.3, not our 2025.11.3.1 tags.
-          # No --constraint flag: package_constraints.txt is for the Docker image
-          # build only. The e2e test just needs a working HA instance.
-          # pycares<5: newer pycares breaks aiodns (missing ares_query_a_result).
-          echo "Installing HA ${{ env.HA_VERSION_PYPI }} with wheel: $WHEEL"
+          # Install from local source (-e .) so GA custom components are available.
+          # The PyPI version doesn't include greenautarky_onboarding/telemetry.
+          # pycares<5: newer pycares removes ares_query_a_result (breaks aiodns).
+          echo "Installing local HA checkout with wheel: $WHEEL"
           uv pip install --system \
-            "homeassistant==${{ env.HA_VERSION_PYPI }}" \
+            -e . \
             "$WHEEL" \
             "pycares<5"
 
@@ -307,6 +305,8 @@ jobs:
             server_port: 8123
           logger:
             default: warning
+          greenautarky_onboarding:
+          greenautarky_telemetry:
           HACFG
 
           hass -c /tmp/ha-config > /tmp/ha.log 2>&1 &
