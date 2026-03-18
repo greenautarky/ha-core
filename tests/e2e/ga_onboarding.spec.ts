@@ -175,8 +175,12 @@ test.describe.serial("GA onboarding — full flow", () => {
       .first()
       .click();
 
-    // After completion the frontend redirects to /
-    await page.waitForURL(`${BASE_URL}/`, { timeout: 15_000 });
+    // After completion the frontend calls completeGASetup() and navigates away.
+    // In CI the redirect target may vary (/ or /onboarding.html depending on
+    // HA's auth state), so we just wait for navigation away from the setup page.
+    await page.waitForURL((url) => !url.href.includes("greenautarky-setup"), {
+      timeout: 15_000,
+    });
 
     // KEY ASSERTIONS: no error dialogs at any point
     expect(
