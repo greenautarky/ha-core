@@ -89,6 +89,15 @@ jobs:
           ref: ${{ env.FRONTEND_BRANCH }}
           path: frontend-build
 
+      - name: Capture frontend commit SHA
+        id: frontend-sha
+        run: |
+          SHA=$(git -C frontend-build rev-parse HEAD)
+          SHORT=$(git -C frontend-build rev-parse --short HEAD)
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "short=${SHORT}" >> "$GITHUB_OUTPUT"
+          echo "Frontend commit: ${SHORT} (${SHA})"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -206,6 +215,8 @@ jobs:
             org.opencontainers.image.version=${{ steps.tag.outputs.tag }}
             org.opencontainers.image.title=Home Assistant Core (greenautarky)
             org.opencontainers.image.source=https://github.com/greenautarky/ha-core
+            org.greenautarky.frontend-version=${{ env.FRONTEND_BRANCH }}@${{ steps.frontend-sha.outputs.short }}
+            org.greenautarky.frontend-sha=${{ steps.frontend-sha.outputs.sha }}
           tags: ${{ env.IMAGE }}:ci-${{ github.sha }}
 
       - name: Verify GA frontend in built image
