@@ -316,6 +316,21 @@ jobs:
         run: |
           pip install uv
           WHEEL=$(ls home_assistant_frontend-*.whl)
+
+          # Extract the version from the wheel filename so we can patch the
+          # core requirements to match.  Without this, HA's runtime dependency
+          # check sees "==0.0.0.dev0" in requirements_all.txt / manifest.json,
+          # tries to install that non-existent version from PyPI, and the
+          # frontend never loads (→ 404 on greenautarky-setup.html).
+          FE_VER=$(echo "$WHEEL" | sed -E 's/home_assistant_frontend-([^-]+)-.*/\1/')
+          echo "Frontend wheel version: $FE_VER"
+          for f in homeassistant/components/frontend/manifest.json \
+                   homeassistant/package_constraints.txt \
+                   requirements_all.txt \
+                   requirements_test_all.txt; do
+            sed -i "s/0\.0\.0\.dev0/${FE_VER}/g" "$f"
+          done
+
           # Install from local source (-e .) so GA custom components are available.
           # The PyPI version doesn't include greenautarky_onboarding/telemetry.
           # pycares<5: newer pycares removes ares_query_a_result (breaks aiodns).
