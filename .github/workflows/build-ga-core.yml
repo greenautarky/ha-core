@@ -108,10 +108,39 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Verify frontend version consistency
+      - name: Compute and inject frontend version
+        id: fe-version
         run: |
-          FE_VERSION=$(grep -oP '^version\s*=\s*"\K[^"]+' frontend-build/pyproject.toml)
-          echo "Frontend version: $FE_VERSION"
+          # Derive a deterministic, monotonically-increasing PEP 440 version:
+          #   YYYYMMDD  — UTC calendar date of the HEAD commit
+          #   N         — total commit count on the branch (always increases)
+          # Example: 20260320.47
+          COMMIT_EPOCH=$(git -C frontend-build log -1 --format='%ct')
+          COMMIT_DATE=$(date -u -d "@${COMMIT_EPOCH}" +%Y%m%d)
+          COMMIT_COUNT=$(git -C frontend-build rev-list --count HEAD)
+          FE_VERSION="${COMMIT_DATE}.${COMMIT_COUNT}"
+          echo "version=${FE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Computed frontend version: ${FE_VERSION}"
+
+          # Inject into pyproject.toml (replaces the 0.0.0.dev0 placeholder)
+          sed -i "s/^version\s*=\s*\"0\.0\.0\.dev0\"/version = \"${FE_VERSION}\"/" \
+            frontend-build/pyproject.toml
+          echo "  pyproject.toml: $(grep '^version' frontend-build/pyproject.toml)"
+
+          # Inject into all 4 pin locations in the core repo
+          for FILE in \
+            homeassistant/components/frontend/manifest.json \
+            homeassistant/package_constraints.txt \
+            requirements_all.txt \
+            requirements_test_all.txt; do
+            sed -i "s/home-assistant-frontend==0\.0\.0\.dev0/home-assistant-frontend==${FE_VERSION}/g" \
+              "$FILE"
+            echo "  ${FILE}: $(grep 'home-assistant-frontend' "${FILE}")"
+          done
+
+      - name: Verify version injection
+        run: |
+          FE_VERSION="${{ steps.fe-version.outputs.version }}"
           ERRORS=0
           for FILE in \
             homeassistant/components/frontend/manifest.json \
@@ -120,16 +149,13 @@ jobs:
             requirements_test_all.txt; do
             PINNED=$(grep -oP 'home-assistant-frontend==\K[^\s"]+' "$FILE" || true)
             if [ "$PINNED" != "$FE_VERSION" ]; then
-              echo "::error file=$FILE::Version mismatch: $FILE has '$PINNED', expected '$FE_VERSION'"
+              echo "::error file=$FILE::Injection failed: expected '${FE_VERSION}', got '${PINNED}'"
               ERRORS=$((ERRORS + 1))
             else
-              echo "  OK: $FILE matches ($PINNED)"
+              echo "  OK: $FILE = ${PINNED}"
             fi
           done
-          if [ "$ERRORS" -gt 0 ]; then
-            echo "::error::Frontend version mismatch in $ERRORS file(s). Update all 5 locations to '$FE_VERSION'."
-            exit 1
-          fi
+          if [ "$ERRORS" -gt 0 ]; then exit 1; fi
 
       - name: Install frontend dependencies
         working-directory: frontend-build
@@ -217,6 +243,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/greenautarky/ha-core
             org.greenautarky.frontend-version=${{ env.FRONTEND_BRANCH }}@${{ steps.frontend-sha.outputs.short }}
             org.greenautarky.frontend-sha=${{ steps.frontend-sha.outputs.sha }}
+            org.greenautarky.frontend-pyversion=${{ steps.fe-version.outputs.version }}
           tags: ${{ env.IMAGE }}:ci-${{ github.sha }}
 
       - name: Verify GA frontend in built image
