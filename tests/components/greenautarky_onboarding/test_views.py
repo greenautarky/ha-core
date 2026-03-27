@@ -1063,3 +1063,328 @@ class TestResetView:
         client = await hass_client(user_token)
         resp = await client.post("/api/greenautarky_onboarding/reset")
         assert resp.status == HTTPStatus.FORBIDDEN
+
+
+class TestPinVerifyView:
+    """Tests for POST /api/greenautarky_onboarding/verify_pin.
+
+    The PIN endpoint verifies a 6-digit code printed on the device sticker
+    to prove physical access. Exponential backoff prevents brute-force.
+    """
+
+    async def test_pin_not_required_when_no_file(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test status shows pin_required=false when no PIN file exists."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/api/greenautarky_onboarding/status")
+        assert resp.status == HTTPStatus.OK
+        data = await resp.json()
+        assert data["pin_required"] is False
+        assert data["pin_verified"] is False
+
+    async def test_pin_required_when_file_exists(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test status shows pin_required=true when PIN file exists."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            resp = await client.get("/api/greenautarky_onboarding/status")
+            data = await resp.json()
+            assert data["pin_required"] is True
+            assert data["pin_verified"] is False
+
+    async def test_verify_pin_correct(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test correct PIN returns ok and sets pin_verified."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            resp = await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "847293"},
+            )
+            assert resp.status == HTTPStatus.OK
+            data = await resp.json()
+            assert data["status"] == "ok"
+
+            # Verify status reflects verification
+            resp = await client.get("/api/greenautarky_onboarding/status")
+            data = await resp.json()
+            assert data["pin_verified"] is True
+            assert "pin" in data["steps_done"]
+
+    async def test_verify_pin_wrong(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test wrong PIN returns error."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            resp = await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "000000"},
+            )
+            assert resp.status == HTTPStatus.UNAUTHORIZED
+            data = await resp.json()
+            assert data["status"] == "error"
+            assert data["attempts"] == 1
+
+    async def test_verify_pin_dash_format(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test PIN with dash format (847-293) is accepted."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            resp = await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "847-293"},
+            )
+            assert resp.status == HTTPStatus.OK
+            data = await resp.json()
+            assert data["status"] == "ok"
+
+    async def test_verify_pin_exponential_backoff(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test exponential backoff on repeated failures."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            # First attempt — no delay
+            resp = await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "111111"},
+            )
+            data = await resp.json()
+            assert data["retry_after"] == 0
+            assert data["attempts"] == 1
+
+            # Second attempt — 5s delay
+            resp = await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "222222"},
+            )
+            data = await resp.json()
+            assert data["retry_after"] == 5
+            assert data["attempts"] == 2
+
+            # Third attempt — should be locked (429)
+            resp = await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "333333"},
+            )
+            assert resp.status == HTTPStatus.TOO_MANY_REQUESTS
+            data = await resp.json()
+            assert data["status"] == "locked"
+            assert data["retry_after"] > 0
+
+    async def test_verify_pin_idempotent_after_success(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test verify_pin returns ok if already verified."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            # First verify
+            await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "847293"},
+            )
+
+            # Second call — still ok
+            resp = await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "847293"},
+            )
+            assert resp.status == HTTPStatus.OK
+            data = await resp.json()
+            assert data["status"] == "ok"
+
+    async def test_verify_pin_rejected_when_completed(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        tmp_path,
+    ) -> None:
+        """Test verify_pin returns 403 when onboarding is already completed."""
+        state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["pin", "gdpr", "account"],
+            "consents": {},
+        }
+
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, state)
+            client = await hass_client()
+
+            resp = await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "847293"},
+            )
+            assert resp.status == HTTPStatus.FORBIDDEN
+
+    async def test_gdpr_blocked_before_pin_verified(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test GDPR endpoint returns 403 when PIN not yet verified."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            resp = await client.post(
+                "/api/greenautarky_onboarding/gdpr",
+                json={"accepted": True},
+            )
+            assert resp.status == HTTPStatus.FORBIDDEN
+            data = await resp.json()
+            assert "PIN" in data["error"]
+
+    async def test_gdpr_allowed_after_pin_verified(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test GDPR endpoint works after PIN is verified."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            # Verify PIN first
+            await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "847293"},
+            )
+
+            # GDPR should now work
+            resp = await client.post(
+                "/api/greenautarky_onboarding/gdpr",
+                json={"accepted": True},
+            )
+            assert resp.status == HTTPStatus.OK
+
+    async def test_no_pin_file_gdpr_not_blocked(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test GDPR works normally when no PIN file exists (backward compat)."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/gdpr",
+            json={"accepted": True},
+        )
+        assert resp.status == HTTPStatus.OK
