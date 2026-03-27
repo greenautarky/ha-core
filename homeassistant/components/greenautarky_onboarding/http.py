@@ -8,7 +8,9 @@ Consent views are authenticated and available after onboarding is complete.
 
 from __future__ import annotations
 
+import hmac
 import logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +26,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .consent import async_record_consent, get_outdated_consents
-from .const import DOMAIN
+from .const import DOMAIN, PIN_FILE, PIN_MAX_DELAY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +62,32 @@ def _check_not_completed(hass: HomeAssistant) -> web.Response | None:
     return None
 
 
+def _pin_file_path(hass: HomeAssistant) -> Path:
+    """Get the path to the onboarding PIN file."""
+    return Path(hass.config.path(PIN_FILE))
+
+
+def _pin_required(hass: HomeAssistant) -> bool:
+    """Check if a PIN file exists on the device."""
+    return _pin_file_path(hass).exists()
+
+
+def _check_pin_verified(hass: HomeAssistant) -> web.Response | None:
+    """Return 403 if PIN is required but not yet verified.
+
+    Called by GDPR, create_user, and other endpoints to gate access
+    until physical access is proven.
+    """
+    if not _pin_required(hass):
+        return None  # No PIN file — no verification needed
+    state = _get_state(hass)
+    if state.get("pin_verified"):
+        return None  # Already verified
+    return web.json_response(
+        {"error": "PIN verification required"}, status=403
+    )
+
+
 class GAOnboardingPageView(HomeAssistantView):
     """Redirect to the built greenautarky-setup.html page.
 
@@ -88,10 +116,22 @@ class GAOnboardingStatusView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request: web.Request) -> web.Response:
-        """Return onboarding status."""
+        """Return onboarding status including PIN verification state."""
         hass: HomeAssistant = request.app["hass"]
         state = _get_state(hass)
-        return self.json(state)
+        response = {**state}
+
+        # Add PIN status fields
+        response["pin_required"] = _pin_required(hass)
+        response["pin_verified"] = state.get("pin_verified", False)
+        locked_until = state.get("pin_locked_until")
+        if locked_until:
+            remaining = (
+                datetime.fromisoformat(locked_until) - datetime.now(timezone.utc)
+            ).total_seconds()
+            response["pin_retry_after"] = max(0, int(remaining))
+
+        return self.json(response)
 
 
 class GAOnboardingGDPRView(HomeAssistantView):
@@ -105,6 +145,8 @@ class GAOnboardingGDPRView(HomeAssistantView):
         """Accept GDPR consent."""
         hass: HomeAssistant = request.app["hass"]
         if err := _check_not_completed(hass):
+            return err
+        if err := _check_pin_verified(hass):
             return err
 
         state = _get_state(hass)
@@ -202,6 +244,8 @@ class GAOnboardingCreateUserView(HomeAssistantView):
         """Create a new user and return auth_code for frontend auth."""
         hass: HomeAssistant = request.app["hass"]
         if err := _check_not_completed(hass):
+            return err
+        if err := _check_pin_verified(hass):
             return err
 
         body = await request.json()
@@ -308,6 +352,106 @@ class GAOnboardingResetView(HomeAssistantView):
 
         _LOGGER.info("greenautarky onboarding state reset by %s", user.name)
         return self.json({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# PIN verification (unauthenticated — proves physical access to device)
+# ---------------------------------------------------------------------------
+
+
+class GAPinVerifyView(HomeAssistantView):
+    """Verify the 6-digit onboarding PIN printed on the device sticker.
+
+    The PIN file is written to the device during provisioning (ga-flasher
+    stage 69b) and persists across onboarding resets. Exponential backoff
+    prevents brute-force attacks from the internet.
+
+    Rate limiting: delay = min(5 * 2^(attempt-2), 3600) for attempt >= 2
+    """
+
+    url = "/api/greenautarky_onboarding/verify_pin"
+    name = "api:greenautarky_onboarding:verify_pin"
+    requires_auth = False
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Verify the submitted PIN against the device's PIN file."""
+        hass: HomeAssistant = request.app["hass"]
+
+        if err := _check_not_completed(hass):
+            return err
+
+        state = _get_state(hass)
+        store = _get_store(hass)
+
+        # Already verified — idempotent
+        if state.get("pin_verified"):
+            return self.json({"status": "ok"})
+
+        # Check rate limit
+        locked_until = state.get("pin_locked_until")
+        if locked_until:
+            remaining = (
+                datetime.fromisoformat(locked_until)
+                - datetime.now(timezone.utc)
+            ).total_seconds()
+            if remaining > 0:
+                return self.json(
+                    {
+                        "status": "locked",
+                        "message": "Too many attempts",
+                        "retry_after": int(remaining),
+                    },
+                    status_code=429,
+                )
+
+        # Read PIN from device file
+        pin_path = _pin_file_path(hass)
+        if not pin_path.exists():
+            return self.json(
+                {"error": "No PIN configured on this device"}, status_code=404
+            )
+
+        stored_pin = pin_path.read_text().strip()
+
+        # Parse submitted PIN (strip dashes, whitespace)
+        body = await request.json()
+        submitted_pin = body.get("pin", "").strip().replace("-", "")
+
+        # Constant-time comparison to prevent timing attacks
+        if hmac.compare_digest(submitted_pin.encode(), stored_pin.encode()):
+            # Success
+            state["pin_verified"] = True
+            if "pin" not in state.get("steps_done", []):
+                state.setdefault("steps_done", []).append("pin")
+            state["pin_attempts"] = 0
+            state["pin_locked_until"] = None
+            await store.async_save(state)
+            _LOGGER.info("Onboarding PIN verified successfully")
+            return self.json({"status": "ok"})
+
+        # Failure — increment attempts with exponential backoff
+        attempts = state.get("pin_attempts", 0) + 1
+        state["pin_attempts"] = attempts
+
+        delay = 0
+        if attempts >= 2:
+            delay = min(5 * (2 ** (attempts - 2)), PIN_MAX_DELAY)
+            lock_time = datetime.now(timezone.utc) + timedelta(seconds=delay)
+            state["pin_locked_until"] = lock_time.isoformat()
+
+        await store.async_save(state)
+        _LOGGER.warning(
+            "Invalid PIN attempt %d (next retry in %ds)", attempts, delay
+        )
+        return self.json(
+            {
+                "status": "error",
+                "message": "Invalid PIN",
+                "retry_after": delay,
+                "attempts": attempts,
+            },
+            status_code=401,
+        )
 
 
 # ---------------------------------------------------------------------------
