@@ -754,7 +754,10 @@ class TestConsentViews:
             "completed": True,
             "gdpr_accepted": True,
             "steps_done": ["gdpr", "complete"],
-            "consents": {"gdpr": {"version": 1, "accepted_at": "2026-01-01"}},
+            "consents": {
+                "gdpr": {"version": 1, "accepted_at": "2026-01-01"},
+                "ethernet": {"version": 1, "accepted_at": "2026-01-01"},
+            },
         }
         await _setup_component(hass, hass_storage, state)
         client = await hass_client()

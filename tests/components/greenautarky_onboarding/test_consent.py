@@ -42,6 +42,10 @@ class TestGetOutdatedConsents:
                     "version": CONSENT_TYPES["gdpr"],
                     "accepted_at": "2026-01-01T00:00:00+00:00",
                 },
+                "ethernet": {
+                    "version": CONSENT_TYPES["ethernet"],
+                    "accepted_at": "2026-01-01T00:00:00+00:00",
+                },
             },
         }
         result = get_outdated_consents(state)
@@ -127,6 +131,10 @@ class TestCheckAndCreateIssues:
                     "version": CONSENT_TYPES["gdpr"],
                     "accepted_at": "2026-01-01T00:00:00+00:00",
                 },
+                "ethernet": {
+                    "version": CONSENT_TYPES["ethernet"],
+                    "accepted_at": "2026-01-01T00:00:00+00:00",
+                },
             },
         }
 
@@ -136,6 +144,4 @@ class TestCheckAndCreateIssues:
             async_check_and_create_issues(hass, state)
 
         mock_ir.async_create_issue.assert_not_called()
-        mock_ir.async_delete_issue.assert_called_once_with(
-            hass, DOMAIN, "consent_outdated_gdpr"
-        )
+        assert mock_ir.async_delete_issue.call_count == 2
