@@ -9,7 +9,7 @@
  *   - GA onboarding is in fresh state (not completed)
  *
  * Flow under test:
- *   welcome → gdpr → create user → info pages → analytics → redirect to /
+ *   welcome → gdpr → create user → info pages → analytics → ethernet → redirect to /
  *
  * Environment variables:
  *   HA_BASE_URL   — HA instance URL (default: http://localhost:8123)
@@ -142,7 +142,7 @@ test.beforeEach(async () => {
 // ---------------------------------------------------------------------------
 
 test.describe.serial("GA onboarding — full flow", () => {
-  test("complete flow — all 5 steps ending with redirect to /", async ({
+  test("complete flow — all 6 steps ending with redirect to /", async ({
     page,
   }) => {
     page.setDefaultTimeout(TIMEOUT);
@@ -171,6 +171,14 @@ test.describe.serial("GA onboarding — full flow", () => {
     await expect(page.locator("ga-setup-analytics")).toBeAttached();
     await page
       .locator("ga-setup-analytics")
+      .getByRole("button")
+      .first()
+      .click();
+
+    // 6. Ethernet consent
+    await expect(page.locator("ga-setup-ethernet")).toBeAttached();
+    await page
+      .locator("ga-setup-ethernet")
       .getByRole("button")
       .first()
       .click();
