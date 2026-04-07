@@ -9,6 +9,7 @@ STEP_PIN = "pin"
 STEP_ACCOUNT = "account"
 STEP_GDPR = "gdpr"
 STEP_TELEMETRY = "telemetry"
+STEP_ETHERNET = "ethernet"
 STEP_INFO = "info"
 STEP_COMPLETE = "complete"
 
@@ -20,9 +21,11 @@ PIN_MAX_DELAY = 3600  # 1 hour cap for exponential backoff
 # Bump the version number to trigger re-consent for all users.
 CONSENT_TYPES: dict[str, int] = {
     "gdpr": 1,
+    "ethernet": 1,
 }
 
 # Human-readable titles for consent types (German)
 CONSENT_TITLES: dict[str, str] = {
     "gdpr": "Datenschutzerklärung",
+    "ethernet": "Ethernet-Verbindung",
 }

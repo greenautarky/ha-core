@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -190,6 +191,55 @@ class GAOnboardingTelemetryView(HomeAssistantView):
 
         if "telemetry" not in state["steps_done"]:
             state["steps_done"].append("telemetry")
+        await store.async_save(state)
+
+        return self.json({"status": "ok"})
+
+
+class GAOnboardingEthernetView(HomeAssistantView):
+    """Handle Ethernet consent.
+
+    Ethernet is disabled by default (set during provisioning by ga-flasher).
+    Users must actively consent to enable it during onboarding.
+    """
+
+    url = "/api/greenautarky_onboarding/ethernet"
+    name = "api:greenautarky_onboarding:ethernet"
+    requires_auth = False
+
+    async def post(self, request: web.Request) -> web.Response:
+        """Save Ethernet preference and record consent."""
+        hass: HomeAssistant = request.app["hass"]
+        if err := _check_not_completed(hass):
+            return err
+
+        state = _get_state(hass)
+        store = _get_store(hass)
+
+        body = await request.json()
+        enable_ethernet = bool(body.get("enable_ethernet", False))
+
+        # Record consent via the version-tracked consent system
+        await async_record_consent(hass, store, state, "ethernet")
+
+        if enable_ethernet:
+            def _enable_ethernet() -> None:
+                subprocess.run(
+                    ["ga-manage-ethernet", "enable"],
+                    timeout=10,
+                    check=False,
+                )
+
+            try:
+                await hass.async_add_executor_job(_enable_ethernet)
+            except Exception:
+                _LOGGER.exception("Failed to enable Ethernet")
+                return web.json_response(
+                    {"message": "Failed to enable Ethernet"}, status=500
+                )
+
+        if "ethernet" not in state["steps_done"]:
+            state["steps_done"].append("ethernet")
         await store.async_save(state)
 
         return self.json({"status": "ok"})
