@@ -118,10 +118,13 @@ class TestCheckAndCreateIssues:
         ) as mock_ir:
             async_check_and_create_issues(hass, state)
 
-        mock_ir.async_create_issue.assert_called()
-        call_args = mock_ir.async_create_issue.call_args
-        assert call_args.kwargs["translation_key"] == "consent_outdated_gdpr"
-        assert call_args.kwargs["is_fixable"] is True
+        # Both gdpr and ethernet issues should be created (no consents recorded)
+        assert mock_ir.async_create_issue.call_count == 2
+        keys = [c.kwargs["translation_key"] for c in mock_ir.async_create_issue.call_args_list]
+        assert "consent_outdated_gdpr" in keys
+        assert "consent_outdated_ethernet" in keys
+        for c in mock_ir.async_create_issue.call_args_list:
+            assert c.kwargs["is_fixable"] is True
 
     def test_deletes_issue_for_current(self, hass: HomeAssistant) -> None:
         """Delete repair issue when consent is current."""
