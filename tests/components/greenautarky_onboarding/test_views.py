@@ -1391,3 +1391,362 @@ class TestPinVerifyView:
             json={"accepted": True},
         )
         assert resp.status == HTTPStatus.OK
+
+
+# ---------------------------------------------------------------------------
+# Password reset (PIN-based, unauthenticated)
+# ---------------------------------------------------------------------------
+
+
+class TestPasswordResetViews:
+    """Tests for PIN-based password reset endpoints."""
+
+    async def test_reset_page_loads(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test password reset page returns HTML."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/greenautarky-password-reset")
+        assert resp.status == HTTPStatus.OK
+        text = await resp.text()
+        assert "Passwort" in text
+
+    async def test_users_requires_pin(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test user list requires correct PIN."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset/users",
+                json={"pin": "000000"},
+            )
+            assert resp.status == HTTPStatus.UNAUTHORIZED
+            data = await resp.json()
+            assert data["status"] == "error"
+
+    async def test_users_returns_tenant_only(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test user list returns only GROUP_ID_USER, not admin."""
+        from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
+
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+
+            provider = None
+            for prv in hass.auth.auth_providers:
+                if prv.type == "homeassistant":
+                    provider = prv
+                    break
+            await provider.async_initialize()
+            await provider.async_add_auth("admin_user", "admin_pass")
+            admin = await hass.auth.async_create_user(
+                "Admin", group_ids=[GROUP_ID_ADMIN]
+            )
+            cred_admin = await provider.async_get_or_create_credentials(
+                {"username": "admin_user"}
+            )
+            await hass.auth.async_link_user(admin, cred_admin)
+
+            await provider.async_add_auth("tenant_user", "tenant_pass")
+            tenant = await hass.auth.async_create_user(
+                "Tenant Max", group_ids=[GROUP_ID_USER]
+            )
+            cred_tenant = await provider.async_get_or_create_credentials(
+                {"username": "tenant_user"}
+            )
+            await hass.auth.async_link_user(tenant, cred_tenant)
+
+            client = await hass_client()
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset/users",
+                json={"pin": "847293"},
+            )
+            assert resp.status == HTTPStatus.OK
+            data = await resp.json()
+            usernames = [u["username"] for u in data["users"]]
+            assert "tenant_user" in usernames
+            assert "admin_user" not in usernames
+
+    async def test_reset_changes_password(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test password reset actually changes the password."""
+        from homeassistant.auth.const import GROUP_ID_USER
+        from homeassistant.auth.providers.homeassistant import InvalidAuth
+
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+
+            provider = None
+            for prv in hass.auth.auth_providers:
+                if prv.type == "homeassistant":
+                    provider = prv
+                    break
+            await provider.async_initialize()
+            await provider.async_add_auth("mieter", "old_password_123")
+            user = await hass.auth.async_create_user(
+                "Mieter", group_ids=[GROUP_ID_USER]
+            )
+            cred = await provider.async_get_or_create_credentials(
+                {"username": "mieter"}
+            )
+            await hass.auth.async_link_user(user, cred)
+
+            client = await hass_client()
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset",
+                json={
+                    "pin": "847293",
+                    "username": "mieter",
+                    "new_password": "new_secure_password_456",
+                },
+            )
+            assert resp.status == HTTPStatus.OK
+            data = await resp.json()
+            assert data["status"] == "ok"
+
+            # New password works
+            await provider.async_validate_login("mieter", "new_secure_password_456")
+
+            # Old password fails
+            with pytest.raises(InvalidAuth):
+                await provider.async_validate_login("mieter", "old_password_123")
+
+    async def test_reset_wrong_pin(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test reset with wrong PIN returns 401."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset",
+                json={
+                    "pin": "000000",
+                    "username": "mieter",
+                    "new_password": "anything",
+                },
+            )
+            assert resp.status == HTTPStatus.UNAUTHORIZED
+            data = await resp.json()
+            assert data["attempts"] == 1
+
+    async def test_reset_rate_limited(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test exponential backoff on repeated wrong PINs."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            # First wrong attempt — no delay
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset/users",
+                json={"pin": "000000"},
+            )
+            assert resp.status == HTTPStatus.UNAUTHORIZED
+            data = await resp.json()
+            assert data["retry_after"] == 0
+
+            # Second wrong attempt — 5s delay
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset/users",
+                json={"pin": "000000"},
+            )
+            assert resp.status == HTTPStatus.UNAUTHORIZED
+            data = await resp.json()
+            assert data["retry_after"] == 5
+
+            # Now locked — 429
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset/users",
+                json={"pin": "847293"},
+            )
+            assert resp.status == HTTPStatus.TOO_MANY_REQUESTS
+
+    async def test_reset_no_pin_file(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Test reset returns 404 when no PIN file exists."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.post(
+            "/api/greenautarky_onboarding/password_reset/users",
+            json={"pin": "123456"},
+        )
+        assert resp.status == HTTPStatus.NOT_FOUND
+
+    async def test_reset_admin_blocked(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test reset rejects admin users."""
+        from homeassistant.auth.const import GROUP_ID_ADMIN
+
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+
+            provider = None
+            for prv in hass.auth.auth_providers:
+                if prv.type == "homeassistant":
+                    provider = prv
+                    break
+            await provider.async_initialize()
+            await provider.async_add_auth("admin_user", "admin_pass")
+            admin = await hass.auth.async_create_user(
+                "Admin", group_ids=[GROUP_ID_ADMIN]
+            )
+            cred = await provider.async_get_or_create_credentials(
+                {"username": "admin_user"}
+            )
+            await hass.auth.async_link_user(admin, cred)
+
+            client = await hass_client()
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset",
+                json={
+                    "pin": "847293",
+                    "username": "admin_user",
+                    "new_password": "new_admin_pw",
+                },
+            )
+            assert resp.status == HTTPStatus.NOT_FOUND
+
+    async def test_reset_separate_pin_state(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test password reset PIN state is separate from onboarding PIN."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            # Fail password reset PIN
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset/users",
+                json={"pin": "000000"},
+            )
+            assert resp.status == HTTPStatus.UNAUTHORIZED
+
+            # Onboarding PIN should still work
+            resp = await client.post(
+                "/api/greenautarky_onboarding/verify_pin",
+                json={"pin": "847293"},
+            )
+            assert resp.status == HTTPStatus.OK
+
+    async def test_reset_missing_fields(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+        tmp_path,
+    ) -> None:
+        """Test reset returns 400 when username or password missing."""
+        pin_file = tmp_path / "ga-onboarding-pin"
+        pin_file.write_text("847293")
+
+        with patch(
+            "homeassistant.components.greenautarky_onboarding.http._pin_file_path",
+            return_value=pin_file,
+        ):
+            await _setup_component(hass, hass_storage, default_state)
+            client = await hass_client()
+
+            resp = await client.post(
+                "/api/greenautarky_onboarding/password_reset",
+                json={"pin": "847293", "username": "", "new_password": ""},
+            )
+            assert resp.status == HTTPStatus.BAD_REQUEST

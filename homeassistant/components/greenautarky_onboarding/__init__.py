@@ -34,6 +34,9 @@ from .http import (
     GAOnboardingResetView,
     GAOnboardingStatusView,
     GAOnboardingTelemetryView,
+    GAPasswordResetPageView,
+    GAPasswordResetUsersView,
+    GAPasswordResetView,
     GAPinVerifyView,
 )
 
@@ -91,6 +94,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(GAOnboardingCreateUserView())
     hass.http.register_view(GAOnboardingResetView())
     hass.http.register_view(GAPinVerifyView())
+
+    # Register password reset views (unauthenticated, PIN-gated)
+    hass.http.register_view(GAPasswordResetPageView())
+    hass.http.register_view(GAPasswordResetUsersView())
+    hass.http.register_view(GAPasswordResetView())
 
     # Register consent HTTP views (authenticated, always available)
     hass.http.register_view(GAConsentPageView())
