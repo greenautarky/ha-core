@@ -443,13 +443,17 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Promote staging image to final tags
-  # Only runs when BOTH build AND test-e2e succeed.
-  # This ensures :latest is never updated with a broken build.
+  # Only runs on workflow_dispatch (manual release trigger).
+  # On push events, the :ci-{sha} staging tag remains — no release tags are
+  # set. This ensures :2025.11.3.1 and :latest are only updated when
+  # explicitly intended, keeping releases reproducible and stable.json
+  # consistent.
   # ---------------------------------------------------------------------------
   promote:
     name: Promote image to final tags
     runs-on: ubuntu-latest
     needs: [build, test-e2e]
+    if: github.event_name == 'workflow_dispatch'
     permissions:
       packages: write
 
@@ -461,31 +465,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Determine final tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Pull staging image and promote to final tags
         run: |
+          TAG="${{ github.event.inputs.tag }}"
+          echo "Promoting ci-${{ github.sha }} → :${TAG} :latest :landingpage :${{ env.HA_VERSION }}"
+
           docker pull --platform linux/arm/v7 ${{ env.IMAGE }}:ci-${{ github.sha }}
 
-          docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:${TAG}
           docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:latest
           docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:landingpage
           docker tag ${{ env.IMAGE }}:ci-${{ github.sha }} ${{ env.IMAGE }}:${{ env.HA_VERSION }}
 
-          docker push ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+          docker push ${{ env.IMAGE }}:${TAG}
           docker push ${{ env.IMAGE }}:latest
           docker push ${{ env.IMAGE }}:landingpage
           docker push ${{ env.IMAGE }}:${{ env.HA_VERSION }}
 
           echo "Image promoted to final tags."
-          echo "  :${{ steps.tag.outputs.tag }}"
+          echo "  :${TAG}"
           echo "  :latest"
           echo "  :landingpage"
           echo "  :${{ env.HA_VERSION }}"
