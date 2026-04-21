@@ -691,9 +691,18 @@ class IndexView(web_urldispatcher.AbstractResource):
         if not onboarding.async_is_onboarded(hass):
             return web.Response(status=302, headers={"location": "/onboarding.html"})
 
-        # Redirect to greenautarky onboarding if not completed
+        # Redirect to greenautarky onboarding if not completed.
+        # Admin escape hatch: ?ga_bypass=1 or ga_bypass=1 cookie skips the redirect.
         ga_onboarding = hass.data.get("greenautarky_onboarding")
-        if ga_onboarding and not ga_onboarding["state"].get("completed"):
+        ga_bypass = (
+            request.query.get("ga_bypass") == "1"
+            or request.cookies.get("ga_bypass") == "1"
+        )
+        if (
+            ga_onboarding
+            and not ga_onboarding["state"].get("completed")
+            and not ga_bypass
+        ):
             return web.Response(
                 status=302,
                 headers={"location": "/greenautarky-setup.html"},
@@ -722,6 +731,16 @@ class IndexView(web_urldispatcher.AbstractResource):
             content_type="text/html",
         )
         response.enable_compression()
+        # Persist bypass as cookie so subsequent navigations (no query param) still bypass.
+        if request.query.get("ga_bypass") == "1":
+            response.set_cookie(
+                "ga_bypass",
+                "1",
+                max_age=3600,
+                httponly=True,
+                samesite="Lax",
+                path="/",
+            )
         return response
 
     def __len__(self) -> int:

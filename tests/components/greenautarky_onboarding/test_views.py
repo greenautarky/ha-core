@@ -1750,3 +1750,116 @@ class TestPasswordResetViews:
                 json={"pin": "847293", "username": "", "new_password": ""},
             )
             assert resp.status == HTTPStatus.BAD_REQUEST
+
+
+class TestAdminBypass:
+    """Tests for the ga_bypass=1 admin escape hatch.
+
+    The bypass lets admins reach the normal HA login without completing the
+    GA onboarding wizard. It works via either a `?ga_bypass=1` query param
+    or a `ga_bypass=1` cookie. The status endpoint must report
+    `completed=true` when the cookie is set so the client-side authorize.ts
+    skips its redirect to /greenautarky-setup.html.
+    """
+
+    async def test_status_without_cookie_reports_actual_state(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Normal customer (no bypass cookie) sees the real onboarding state."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/api/greenautarky_onboarding/status")
+        assert resp.status == HTTPStatus.OK
+        data = await resp.json()
+        assert data["completed"] is False
+
+    async def test_status_with_bypass_cookie_reports_completed(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Admin with bypass cookie sees completed=true so client-side skips redirect."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get(
+            "/api/greenautarky_onboarding/status",
+            cookies={"ga_bypass": "1"},
+        )
+        assert resp.status == HTTPStatus.OK
+        data = await resp.json()
+        assert data["completed"] is True
+
+    async def test_status_with_bypass_cookie_does_not_mutate_state(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Bypass is per-request: server state must stay not-completed."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        # Request with cookie
+        await client.get(
+            "/api/greenautarky_onboarding/status",
+            cookies={"ga_bypass": "1"},
+        )
+
+        # Server-side state is still not completed
+        assert hass.data[DOMAIN]["state"]["completed"] is False
+
+        # Request without cookie returns real state
+        resp = await client.get("/api/greenautarky_onboarding/status")
+        data = await resp.json()
+        assert data["completed"] is False
+
+    async def test_status_with_wrong_cookie_value_no_bypass(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Only ga_bypass=1 triggers bypass; any other value is ignored."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        for bad in ("0", "true", "yes", ""):
+            resp = await client.get(
+                "/api/greenautarky_onboarding/status",
+                cookies={"ga_bypass": bad},
+            )
+            data = await resp.json()
+            assert data["completed"] is False, f"bad cookie value {bad!r} leaked bypass"
+
+    async def test_status_with_bypass_cookie_when_actually_completed(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Cookie is harmless when onboarding is genuinely completed."""
+        completed_state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "account", "complete"],
+            "consents": {},
+        }
+        await _setup_component(hass, hass_storage, completed_state)
+        client = await hass_client()
+
+        resp = await client.get(
+            "/api/greenautarky_onboarding/status",
+            cookies={"ga_bypass": "1"},
+        )
+        data = await resp.json()
+        assert data["completed"] is True

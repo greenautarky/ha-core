@@ -123,6 +123,11 @@ class GAOnboardingStatusView(HomeAssistantView):
         state = _get_state(hass)
         response = {**state}
 
+        # Admin bypass cookie: report completed=true so authorize.ts (client-side)
+        # skips the GA onboarding redirect and shows the normal HA login.
+        if request.cookies.get("ga_bypass") == "1":
+            response["completed"] = True
+
         # Add PIN status fields
         response["pin_required"] = _pin_required(hass)
         response["pin_verified"] = state.get("pin_verified", False)
