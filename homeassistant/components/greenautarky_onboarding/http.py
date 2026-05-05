@@ -8,7 +8,9 @@ Consent views are authenticated and available after onboarding is complete.
 
 from __future__ import annotations
 
+import base64
 import hmac
+import json
 import logging
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -123,6 +125,11 @@ class GAAdminBypassView(HomeAssistantView):
     request as "Invalid redirect URI" otherwise. /config is used instead
     of /lovelace so a logged-in admin lands in HA Settings — never on the
     GA setup panel which is the auto-default while onboarding is incomplete.
+
+    A `ga_bypass=1` cookie is also set on the redirect response so the
+    server-side IndexView (frontend/__init__.py) skips its own redirect
+    when the post-OAuth `/config?code=…` landing arrives without the
+    `ga_bypass=1` query (HA's OAuth strips query params from redirect_uri).
     """
 
     url = "/admin"
@@ -134,12 +141,39 @@ class GAAdminBypassView(HomeAssistantView):
         # Build origin from the request so it works regardless of how the
         # device is reached (NetBird IP, LAN IP, hostname, public domain).
         origin = f"{request.scheme}://{request.host}"
+        # `auth_callback=1` is required so the HA frontend SPA recognises
+        # `/config?code=…&auth_callback=1` as its own OAuth callback and
+        # exchanges the code for a token. Without it the SPA discards the
+        # code and starts a fresh OAuth round-trip, forcing a second login.
+        #
+        # `state` mirrors what home-assistant-js-websocket does on its own
+        # OAuth init: base64(JSON({hassUrl, clientId})). Without it the SPA
+        # crashes with "InvalidCharacterError: atob" while validating the
+        # callback. Bytes-form base64 to match what HA produces (no padding
+        # is fine — HA decodes via atob which is permissive).
+        state = base64.b64encode(
+            json.dumps({"hassUrl": origin, "clientId": f"{origin}/"}).encode()
+        ).decode()
         params = urlencode({
             "client_id": f"{origin}/",
-            "redirect_uri": f"{origin}/config",
+            "redirect_uri": f"{origin}/config?auth_callback=1",
+            "state": state,
             "ga_bypass": "1",
         })
-        raise web.HTTPFound(f"/auth/authorize?{params}")
+        response = web.Response(
+            status=302,
+            headers={"location": f"/auth/authorize?{params}"},
+        )
+        # Mirror IndexView's cookie shape (frontend/__init__.py:735-743).
+        response.set_cookie(
+            "ga_bypass",
+            "1",
+            max_age=3600,
+            httponly=True,
+            samesite="Lax",
+            path="/",
+        )
+        return response
 
 
 class GAOnboardingStatusView(HomeAssistantView):

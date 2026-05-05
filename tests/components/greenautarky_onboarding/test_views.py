@@ -1024,8 +1024,64 @@ class TestAdminBypassRedirect:
 
         resp = await client.get("/admin", allow_redirects=False)
         query = parse_qs(urlparse(resp.headers["Location"]).query)
-        assert query["redirect_uri"][0].endswith("/config")
+        assert query["redirect_uri"][0].startswith("http")
+        assert "/config" in query["redirect_uri"][0]
         assert "/lovelace" not in query["redirect_uri"][0]
+
+    async def test_admin_redirect_uri_has_auth_callback(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """redirect_uri must end with auth_callback=1 so the SPA exchanges the code.
+
+        Without auth_callback=1 the HA frontend SPA does not recognise
+        /config?code=… as its own OAuth callback and triggers a second
+        round-trip — forcing the admin to log in twice.
+        """
+        from urllib.parse import parse_qs, urlparse
+
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/admin", allow_redirects=False)
+        query = parse_qs(urlparse(resp.headers["Location"]).query)
+        # redirect_uri value is itself a URL — parse it
+        inner = urlparse(query["redirect_uri"][0])
+        inner_query = parse_qs(inner.query)
+        assert inner_query.get("auth_callback") == ["1"]
+
+    async def test_admin_passes_oauth_state(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """state must be base64(JSON({hassUrl, clientId})) so the SPA can decode it.
+
+        The HA frontend SPA decodes state via atob() during the OAuth
+        callback. Without a valid state the SPA crashes with
+        "InvalidCharacterError: Failed to execute 'atob'", leaving the
+        admin on a blank /config page.
+        """
+        import base64
+        import json
+        from urllib.parse import parse_qs, urlparse
+
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/admin", allow_redirects=False)
+        query = parse_qs(urlparse(resp.headers["Location"]).query)
+        state_b64 = query["state"][0]
+        decoded = json.loads(base64.b64decode(state_b64))
+        assert "hassUrl" in decoded
+        assert "clientId" in decoded
+        assert decoded["clientId"].endswith("/")
+        assert decoded["clientId"].rstrip("/") == decoded["hassUrl"]
 
     async def test_admin_redirect_uri_origin_matches_request(
         self,
@@ -1045,14 +1101,42 @@ class TestAdminBypassRedirect:
 
         # client_id is "<origin>/" so it must end with "/"
         assert query["client_id"][0].endswith("/")
-        # redirect_uri must end with "/config"
-        assert query["redirect_uri"][0].endswith("/config")
+        # redirect_uri path must be /config (extra query params are allowed)
+        inner = urlparse(query["redirect_uri"][0])
+        assert inner.path == "/config"
         # Both use the same origin
         client_origin = query["client_id"][0].rstrip("/")
-        redirect_origin = query["redirect_uri"][0].rsplit("/config", 1)[0]
+        redirect_origin = f"{inner.scheme}://{inner.netloc}"
         assert client_origin == redirect_origin
         # ga_bypass=1 set
         assert query["ga_bypass"] == ["1"]
+
+    async def test_admin_sets_ga_bypass_cookie(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """The /admin redirect must set a ga_bypass=1 cookie.
+
+        Without the cookie, the IndexView in frontend/__init__.py bounces
+        the post-OAuth /config?code=… landing back to /greenautarky-setup.html
+        because it has no way to know the user came in via the admin shortcut
+        (HA's OAuth strips query params from redirect_uri).
+        """
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/admin", allow_redirects=False)
+        assert resp.status == HTTPStatus.FOUND
+        # aiohttp test client exposes cookies on the response
+        assert "ga_bypass" in resp.cookies
+        assert resp.cookies["ga_bypass"].value == "1"
+        # HttpOnly + SameSite=Lax + path=/ to match IndexView's cookie shape
+        assert resp.cookies["ga_bypass"]["httponly"]
+        assert resp.cookies["ga_bypass"]["samesite"].lower() == "lax"
+        assert resp.cookies["ga_bypass"]["path"] == "/"
 
     async def test_admin_does_not_require_auth(
         self,
