@@ -14,6 +14,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from aiohttp import web
 
@@ -108,6 +109,37 @@ class GAOnboardingPageView(HomeAssistantView):
         if state.get("completed"):
             raise web.HTTPFound("/")
         raise web.HTTPFound("/greenautarky-setup.html")
+
+
+class GAAdminBypassView(HomeAssistantView):
+    """Admin shortcut that bypasses the GA tenant onboarding wizard.
+
+    GET /admin redirects to /auth/authorize with self-referential OAuth
+    params and ga_bypass=1, landing the admin on the normal HA login page
+    (not the tenant onboarding wizard) regardless of onboarding state.
+
+    Self-referential OAuth params (client_id = device origin, redirect_uri =
+    device-origin/config) are required because <ha-authorize> rejects the
+    request as "Invalid redirect URI" otherwise. /config is used instead
+    of /lovelace so a logged-in admin lands in HA Settings — never on the
+    GA setup panel which is the auto-default while onboarding is incomplete.
+    """
+
+    url = "/admin"
+    name = "greenautarky_onboarding:admin"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Redirect to /auth/authorize with admin-bypass params."""
+        # Build origin from the request so it works regardless of how the
+        # device is reached (NetBird IP, LAN IP, hostname, public domain).
+        origin = f"{request.scheme}://{request.host}"
+        params = urlencode({
+            "client_id": f"{origin}/",
+            "redirect_uri": f"{origin}/config",
+            "ga_bypass": "1",
+        })
+        raise web.HTTPFound(f"/auth/authorize?{params}")
 
 
 class GAOnboardingStatusView(HomeAssistantView):

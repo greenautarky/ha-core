@@ -23,6 +23,7 @@ from homeassistant.helpers.typing import ConfigType
 from .consent import async_check_and_create_issues
 from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION
 from .http import (
+    GAAdminBypassView,
     GAConsentAcceptView,
     GAConsentPageView,
     GAConsentStatusView,
@@ -86,6 +87,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     # Register onboarding HTTP views (always — status check needs to work)
     hass.http.register_view(GAOnboardingPageView())
+    hass.http.register_view(GAAdminBypassView())
     hass.http.register_view(GAOnboardingStatusView())
     hass.http.register_view(GAOnboardingGDPRView())
     hass.http.register_view(GAOnboardingTelemetryView())

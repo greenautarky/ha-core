@@ -957,6 +957,118 @@ class TestPageView:
         assert resp.headers["Location"] == "/"
 
 
+class TestAdminBypassRedirect:
+    """Tests for GET /admin — admin shortcut bypassing tenant onboarding.
+
+    /admin redirects to /auth/authorize with self-referential OAuth params
+    plus ga_bypass=1, landing the admin on the normal HA login page
+    regardless of onboarding state. The redirect target must use /config
+    (not /lovelace) so that — while the GA panel is still registered as
+    the auto-default during pre-onboarding — the admin lands in HA Settings
+    rather than back on the GA setup wizard.
+    """
+
+    async def test_admin_redirects_to_authorize_pre_onboarding(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Pre-onboarding (Case A): /admin redirects to /auth/authorize?...&ga_bypass=1."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/admin", allow_redirects=False)
+        assert resp.status == HTTPStatus.FOUND
+        location = resp.headers["Location"]
+        assert location.startswith("/auth/authorize?")
+        assert "ga_bypass=1" in location
+        assert "client_id=" in location
+        assert "redirect_uri=" in location
+
+    async def test_admin_redirects_to_authorize_post_onboarding(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+    ) -> None:
+        """Post-onboarding (Case B): /admin still works once setup is done."""
+        completed_state = {
+            "completed": True,
+            "gdpr_accepted": True,
+            "steps_done": ["gdpr", "account", "complete"],
+            "consents": {"gdpr": {"version": 1, "accepted_at": "2026-01-01"}},
+        }
+        await _setup_component(hass, hass_storage, completed_state)
+        client = await hass_client()
+
+        resp = await client.get("/admin", allow_redirects=False)
+        assert resp.status == HTTPStatus.FOUND
+        location = resp.headers["Location"]
+        assert location.startswith("/auth/authorize?")
+        assert "ga_bypass=1" in location
+
+    async def test_admin_redirect_uri_is_config_not_lovelace(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """redirect_uri must point to /config — /lovelace would auto-route to GA panel."""
+        from urllib.parse import parse_qs, urlparse
+
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/admin", allow_redirects=False)
+        query = parse_qs(urlparse(resp.headers["Location"]).query)
+        assert query["redirect_uri"][0].endswith("/config")
+        assert "/lovelace" not in query["redirect_uri"][0]
+
+    async def test_admin_redirect_uri_origin_matches_request(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """Self-referential OAuth: client_id and redirect_uri use the request origin."""
+        from urllib.parse import parse_qs, urlparse
+
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client()
+
+        resp = await client.get("/admin", allow_redirects=False)
+        query = parse_qs(urlparse(resp.headers["Location"]).query)
+
+        # client_id is "<origin>/" so it must end with "/"
+        assert query["client_id"][0].endswith("/")
+        # redirect_uri must end with "/config"
+        assert query["redirect_uri"][0].endswith("/config")
+        # Both use the same origin
+        client_origin = query["client_id"][0].rstrip("/")
+        redirect_origin = query["redirect_uri"][0].rsplit("/config", 1)[0]
+        assert client_origin == redirect_origin
+        # ga_bypass=1 set
+        assert query["ga_bypass"] == ["1"]
+
+    async def test_admin_does_not_require_auth(
+        self,
+        hass: HomeAssistant,
+        hass_storage: dict[str, Any],
+        hass_client_no_auth: ClientSessionGenerator,
+        default_state: dict[str, Any],
+    ) -> None:
+        """/admin is reachable without auth — that's the whole point."""
+        await _setup_component(hass, hass_storage, default_state)
+        client = await hass_client_no_auth()
+
+        resp = await client.get("/admin", allow_redirects=False)
+        assert resp.status == HTTPStatus.FOUND
+
+
 class TestResetView:
     """Tests for POST /api/greenautarky_onboarding/reset.
 
