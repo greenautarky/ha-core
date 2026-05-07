@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Image tag (e.g. 2025.11.3.1)"
+        description: "Release tag — MUST match HA_VERSION env in this file"
         required: true
         default: "2025.11.3.1"
+      force_overwrite:
+        description: "Overwrite an already-published release tag on GHCR (only set after explicit operator decision)"
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - ga/custom-onboarding
@@ -464,6 +469,48 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate requested tag matches HA_VERSION env
+        # Forces explicit bump-then-promote: operator must edit HA_VERSION in
+        # this file (and push) BEFORE triggering a release build with a new
+        # tag. Mirrors the supervisor's const.py validation. Catches the
+        # "promote with default 2025.11.3.1 by accident" trap.
+        run: |
+          REQUESTED="${{ github.event.inputs.tag }}"
+          DECLARED="${{ env.HA_VERSION }}"
+          if [ "$REQUESTED" != "$DECLARED" ]; then
+            echo "::error::Requested tag '${REQUESTED}' does not match HA_VERSION env '${DECLARED}'"
+            echo "::error::Bump HA_VERSION in .github/workflows/build-ga-core.yml first, push,"
+            echo "::error::then re-trigger this workflow with tag=${DECLARED}."
+            exit 1
+          fi
+          echo "OK: tag (${REQUESTED}) == HA_VERSION (${DECLARED})"
+
+      - name: Check whether release tag already exists on GHCR
+        # Release tags are intended to be immutable once promoted (rollback
+        # path). Re-running the workflow with the same tag would silently
+        # overwrite the published image. Refuse unless force_overwrite=true.
+        id: existing
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          FORCE="${{ github.event.inputs.force_overwrite }}"
+          # docker manifest inspect exits 1 (and writes an error to stderr)
+          # when the tag is absent — that's the success case here.
+          if docker manifest inspect "${{ env.IMAGE }}:${TAG}" >/dev/null 2>&1; then
+            EXISTS=1
+            echo "Tag ${{ env.IMAGE }}:${TAG} already exists on GHCR."
+          else
+            EXISTS=0
+            echo "Tag ${{ env.IMAGE }}:${TAG} is new — safe to publish."
+          fi
+          echo "exists=${EXISTS}" >> "$GITHUB_OUTPUT"
+
+          if [ "$EXISTS" = "1" ] && [ "$FORCE" != "true" ]; then
+            echo "::error::Refusing to overwrite published release tag ${{ env.IMAGE }}:${TAG}."
+            echo "::error::If this is intentional (e.g. rebuild a withdrawn release), re-trigger"
+            echo "::error::with force_overwrite=true. Otherwise bump HA_VERSION first."
+            exit 1
+          fi
 
       - name: Pull staging image and promote to final tags
         run: |
