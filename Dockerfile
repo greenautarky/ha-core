@@ -44,12 +44,17 @@ RUN \
         -r homeassistant/requirements.txt
 
 COPY requirements_all.txt home_assistant_frontend-* home_assistant_intents-* homeassistant/
+# `&&` between commands (not `;`): under QEMU armv7 emulation the wheel
+# install for home_assistant_frontend has been seen to fail silently with
+# EFAULT, after which `;` would let the subsequent grep+install run on a
+# half-installed environment and the build "succeeds" with a broken image.
+# `&&` makes the failure surface as a build error.
 RUN \
     if ls homeassistant/home_assistant_*.whl 1> /dev/null 2>&1; then \
-        uv pip install homeassistant/home_assistant_*.whl; \
-        grep -v 'home-assistant-frontend' homeassistant/requirements_all.txt \
-            | grep -v 'home-assistant-intents' > homeassistant/requirements_filtered.txt; \
-        uv pip install --no-build -r homeassistant/requirements_filtered.txt; \
+        uv pip install homeassistant/home_assistant_*.whl \
+        && grep -v 'home-assistant-frontend' homeassistant/requirements_all.txt \
+            | grep -v 'home-assistant-intents' > homeassistant/requirements_filtered.txt \
+        && uv pip install --no-build -r homeassistant/requirements_filtered.txt; \
     else \
         uv pip install --no-build -r homeassistant/requirements_all.txt; \
     fi
