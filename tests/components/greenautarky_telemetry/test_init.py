@@ -29,7 +29,11 @@ from tests.typing import WebSocketGenerator
 
 
 async def test_setup_creates_tier_defaults(hass: HomeAssistant) -> None:
-    """No prior storage → defaults match the Tier model (tier1 ON, tier2 OFF)."""
+    """No prior storage → defaults match the Tier model (tier1 ON, tier2 OFF).
+
+    Fresh-device state: policy_version_accepted is None to distinguish
+    "not yet onboarded" from "consent given under an older policy".
+    """
     assert await async_setup_component(hass, DOMAIN, {})
     await hass.async_block_till_done()
 
@@ -38,8 +42,10 @@ async def test_setup_creates_tier_defaults(hass: HomeAssistant) -> None:
     # v2 structured form
     assert prefs["tiers"][TIER_1]["value"] is True
     assert prefs["tiers"][TIER_2]["value"] is False
-    # Policy version stamped
-    assert prefs["policy_version_accepted"] == POLICY_VERSION
+    # Fresh device — no onboarding yet
+    assert prefs["policy_version_accepted"] is None
+    assert prefs["tiers"][TIER_1]["policy_version"] is None
+    assert prefs["tiers"][TIER_1]["accepted_at"] is None
 
 
 async def test_default_tier_legal_basis_alignment(hass: HomeAssistant) -> None:
@@ -110,6 +116,32 @@ async def test_migrates_v1_storage_with_partial_values(
     assert prefs["tiers"][TIER_2]["value"] is False
 
 
+async def test_v1_migration_preserves_accepted_policy_version_as_1(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """Phase E: a v1-migrated user's policy_version_accepted must stay 1.
+
+    The original consent was given under v1 of the privacy policy. If we
+    stamped it with the current POLICY_VERSION at migration time, a
+    future bump would silently mark the user as having accepted the new
+    policy — which they never saw. Preserving 1 ensures a future bump
+    correctly flags them as stale and re-prompts.
+    """
+    hass_storage[STORAGE_KEY] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": STORAGE_KEY,
+        "data": {LEGACY_TIER1_KEY: True, LEGACY_TIER2_KEY: False},
+    }
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+    prefs = hass.data[DOMAIN]["preferences"]
+    assert prefs["policy_version_accepted"] == 1
+    assert prefs["tiers"][TIER_1]["policy_version"] == 1
+    assert prefs["tiers"][TIER_2]["policy_version"] == 1
+
+
 # ---------------------------------------------------------------------------
 # Websocket: GET
 # ---------------------------------------------------------------------------
@@ -133,12 +165,100 @@ async def test_ws_get_returns_both_canonical_and_legacy_keys(
     assert "tiers" in r
     assert "policy_version_accepted" in r
     assert "current_policy_version" in r
+    assert "consent_is_stale" in r
     # Flat canonical
     assert r[TIER_1] is True
     assert r[TIER_2] is False
     # Flat legacy aliases (same values as canonical)
     assert r[LEGACY_TIER1_KEY] is True
     assert r[LEGACY_TIER2_KEY] is False
+
+
+async def test_ws_get_consent_is_stale_false_for_fresh_device(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
+    """Fresh device (no storage yet) is NOT stale — it's pre-onboarding.
+
+    Stale is reserved for "consent was given under an older policy".
+    """
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": "greenautarky_telemetry/get"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["consent_is_stale"] is False
+    assert msg["result"]["policy_version_accepted"] is None
+
+
+async def test_ws_get_consent_is_stale_true_after_policy_bump(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: WebSocketGenerator
+) -> None:
+    """Pre-seed v2 storage with policy_version_accepted=0 (< current).
+
+    Simulates a device that accepted a previous policy version, then the
+    OS shipped a policy bump. The GET response must flag consent_is_stale
+    so the frontend can show a re-accept banner.
+    """
+    hass_storage[STORAGE_KEY] = {
+        "version": 2,
+        "minor_version": 0,
+        "key": STORAGE_KEY,
+        "data": {
+            "policy_version_accepted": 0,
+            "tiers": {
+                TIER_1: {"value": True, "accepted_at": "2026-01-01T00:00:00Z", "policy_version": 0},
+                TIER_2: {"value": False, "accepted_at": "2026-01-01T00:00:00Z", "policy_version": 0},
+            },
+            "legacy": {LEGACY_TIER1_KEY: True, LEGACY_TIER2_KEY: False},
+        },
+    }
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+    client = await hass_ws_client(hass)
+    await client.send_json({"id": 1, "type": "greenautarky_telemetry/get"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["consent_is_stale"] is True
+    assert msg["result"]["policy_version_accepted"] == 0
+
+
+async def test_ws_set_clears_stale_flag(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: WebSocketGenerator
+) -> None:
+    """Saving consent under the current policy clears consent_is_stale."""
+    hass_storage[STORAGE_KEY] = {
+        "version": 2,
+        "minor_version": 0,
+        "key": STORAGE_KEY,
+        "data": {
+            "policy_version_accepted": 0,
+            "tiers": {
+                TIER_1: {"value": True, "accepted_at": "2026-01-01T00:00:00Z", "policy_version": 0},
+                TIER_2: {"value": False, "accepted_at": "2026-01-01T00:00:00Z", "policy_version": 0},
+            },
+            "legacy": {LEGACY_TIER1_KEY: True, LEGACY_TIER2_KEY: False},
+        },
+    }
+    assert await async_setup_component(hass, DOMAIN, {})
+    await hass.async_block_till_done()
+
+    client = await hass_ws_client(hass)
+    # Stale on first read
+    await client.send_json({"id": 1, "type": "greenautarky_telemetry/get"})
+    assert (await client.receive_json())["result"]["consent_is_stale"] is True
+
+    # Save → record now references current POLICY_VERSION → no longer stale
+    await client.send_json({
+        "id": 2, "type": "greenautarky_telemetry/set",
+        TIER_1: True, TIER_2: False,
+    })
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["consent_is_stale"] is False
+    assert msg["result"]["policy_version_accepted"] == POLICY_VERSION
 
 
 # ---------------------------------------------------------------------------
