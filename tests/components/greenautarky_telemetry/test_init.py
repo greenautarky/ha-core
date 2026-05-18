@@ -22,7 +22,6 @@ from homeassistant.setup import async_setup_component
 
 from tests.typing import WebSocketGenerator
 
-
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
@@ -150,8 +149,12 @@ async def test_v1_migration_preserves_accepted_policy_version_as_1(
 async def test_ws_get_returns_both_canonical_and_legacy_keys(
     hass: HomeAssistant, hass_ws_client: WebSocketGenerator
 ) -> None:
-    """Response shape includes tier1/tier2 (canonical) AND error_logs/metrics
-    (legacy aliases) so old UI code keeps working during transition."""
+    """Response shape includes tier1/tier2 (canonical) and legacy aliases.
+
+    Old UI code keeps working during transition: error_logs/metrics
+    (legacy aliases) remain in the response alongside the canonical
+    tier1/tier2 keys.
+    """
     assert await async_setup_component(hass, DOMAIN, {})
     await hass.async_block_till_done()
 
@@ -193,7 +196,9 @@ async def test_ws_get_consent_is_stale_false_for_fresh_device(
 
 
 async def test_ws_get_consent_is_stale_true_after_policy_bump(
-    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: WebSocketGenerator
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: WebSocketGenerator,
 ) -> None:
     """Pre-seed v2 storage with policy_version_accepted=0 (< current).
 
@@ -208,8 +213,16 @@ async def test_ws_get_consent_is_stale_true_after_policy_bump(
         "data": {
             "policy_version_accepted": 0,
             "tiers": {
-                TIER_1: {"value": True, "accepted_at": "2026-01-01T00:00:00Z", "policy_version": 0},
-                TIER_2: {"value": False, "accepted_at": "2026-01-01T00:00:00Z", "policy_version": 0},
+                TIER_1: {
+                    "value": True,
+                    "accepted_at": "2026-01-01T00:00:00Z",
+                    "policy_version": 0,
+                },
+                TIER_2: {
+                    "value": False,
+                    "accepted_at": "2026-01-01T00:00:00Z",
+                    "policy_version": 0,
+                },
             },
             "legacy": {LEGACY_TIER1_KEY: True, LEGACY_TIER2_KEY: False},
         },
@@ -226,7 +239,9 @@ async def test_ws_get_consent_is_stale_true_after_policy_bump(
 
 
 async def test_ws_set_clears_stale_flag(
-    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: WebSocketGenerator
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: WebSocketGenerator,
 ) -> None:
     """Saving consent under the current policy clears consent_is_stale."""
     hass_storage[STORAGE_KEY] = {
@@ -236,8 +251,16 @@ async def test_ws_set_clears_stale_flag(
         "data": {
             "policy_version_accepted": 0,
             "tiers": {
-                TIER_1: {"value": True, "accepted_at": "2026-01-01T00:00:00Z", "policy_version": 0},
-                TIER_2: {"value": False, "accepted_at": "2026-01-01T00:00:00Z", "policy_version": 0},
+                TIER_1: {
+                    "value": True,
+                    "accepted_at": "2026-01-01T00:00:00Z",
+                    "policy_version": 0,
+                },
+                TIER_2: {
+                    "value": False,
+                    "accepted_at": "2026-01-01T00:00:00Z",
+                    "policy_version": 0,
+                },
             },
             "legacy": {LEGACY_TIER1_KEY: True, LEGACY_TIER2_KEY: False},
         },
@@ -251,10 +274,14 @@ async def test_ws_set_clears_stale_flag(
     assert (await client.receive_json())["result"]["consent_is_stale"] is True
 
     # Save → record now references current POLICY_VERSION → no longer stale
-    await client.send_json({
-        "id": 2, "type": "greenautarky_telemetry/set",
-        TIER_1: True, TIER_2: False,
-    })
+    await client.send_json(
+        {
+            "id": 2,
+            "type": "greenautarky_telemetry/set",
+            TIER_1: True,
+            TIER_2: False,
+        }
+    )
     msg = await client.receive_json()
     assert msg["success"]
     assert msg["result"]["consent_is_stale"] is False
@@ -274,11 +301,14 @@ async def test_ws_set_with_legacy_keys(
     await hass.async_block_till_done()
 
     client = await hass_ws_client(hass)
-    await client.send_json({
-        "id": 1, "type": "greenautarky_telemetry/set",
-        LEGACY_TIER1_KEY: False,
-        LEGACY_TIER2_KEY: True,
-    })
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "greenautarky_telemetry/set",
+            LEGACY_TIER1_KEY: False,
+            LEGACY_TIER2_KEY: True,
+        }
+    )
     msg = await client.receive_json()
 
     assert msg["success"]
@@ -294,11 +324,14 @@ async def test_ws_set_with_canonical_keys(
     await hass.async_block_till_done()
 
     client = await hass_ws_client(hass)
-    await client.send_json({
-        "id": 1, "type": "greenautarky_telemetry/set",
-        TIER_1: False,
-        TIER_2: True,
-    })
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "greenautarky_telemetry/set",
+            TIER_1: False,
+            TIER_2: True,
+        }
+    )
     msg = await client.receive_json()
 
     assert msg["success"]
@@ -317,16 +350,19 @@ async def test_ws_set_canonical_wins_over_legacy(
     await hass.async_block_till_done()
 
     client = await hass_ws_client(hass)
-    await client.send_json({
-        "id": 1, "type": "greenautarky_telemetry/set",
-        TIER_1: True,
-        LEGACY_TIER1_KEY: False,    # contradicts canonical, should be ignored
-    })
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "greenautarky_telemetry/set",
+            TIER_1: True,
+            LEGACY_TIER1_KEY: False,  # contradicts canonical, should be ignored
+        }
+    )
     msg = await client.receive_json()
 
     assert msg["success"]
     assert msg["result"][TIER_1] is True
-    assert msg["result"][LEGACY_TIER1_KEY] is True   # mirror reflects canonical
+    assert msg["result"][LEGACY_TIER1_KEY] is True  # mirror reflects canonical
 
 
 async def test_ws_set_persists_v2_storage(
@@ -339,11 +375,14 @@ async def test_ws_set_persists_v2_storage(
     await hass.async_block_till_done()
 
     client = await hass_ws_client(hass)
-    await client.send_json({
-        "id": 1, "type": "greenautarky_telemetry/set",
-        TIER_1: True,
-        TIER_2: True,
-    })
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "greenautarky_telemetry/set",
+            TIER_1: True,
+            TIER_2: True,
+        }
+    )
     msg = await client.receive_json()
     assert msg["success"]
 
@@ -369,10 +408,14 @@ async def test_ws_set_records_accepted_at_iso8601(
     await hass.async_block_till_done()
 
     client = await hass_ws_client(hass)
-    await client.send_json({
-        "id": 1, "type": "greenautarky_telemetry/set",
-        TIER_1: True, TIER_2: False,
-    })
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "greenautarky_telemetry/set",
+            TIER_1: True,
+            TIER_2: False,
+        }
+    )
     msg = await client.receive_json()
     assert msg["success"]
 
@@ -391,10 +434,13 @@ async def test_ws_set_records_policy_version(
     await hass.async_block_till_done()
 
     client = await hass_ws_client(hass)
-    await client.send_json({
-        "id": 1, "type": "greenautarky_telemetry/set",
-        TIER_1: True,
-    })
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "greenautarky_telemetry/set",
+            TIER_1: True,
+        }
+    )
     msg = await client.receive_json()
     assert msg["success"]
     assert msg["result"]["tiers"][TIER_1]["policy_version"] == POLICY_VERSION
@@ -409,19 +455,25 @@ async def test_ws_set_partial_update_preserves_other_tier(
 
     client = await hass_ws_client(hass)
     # Enable tier2 (default is off)
-    await client.send_json({
-        "id": 1, "type": "greenautarky_telemetry/set",
-        TIER_2: True,
-    })
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "greenautarky_telemetry/set",
+            TIER_2: True,
+        }
+    )
     msg = await client.receive_json()
     assert msg["success"]
     assert msg["result"][TIER_2] is True
 
     # Now disable tier1 — tier2 should stay True
-    await client.send_json({
-        "id": 2, "type": "greenautarky_telemetry/set",
-        TIER_1: False,
-    })
+    await client.send_json(
+        {
+            "id": 2,
+            "type": "greenautarky_telemetry/set",
+            TIER_1: False,
+        }
+    )
     msg = await client.receive_json()
     assert msg["success"]
     assert msg["result"][TIER_1] is False
