@@ -53,9 +53,7 @@ def async_check_and_create_issues(hass: HomeAssistant, state: dict[str, Any]) ->
                 translation_key=f"consent_outdated_{consent_type}",
                 data={"consent_type": consent_type},
             )
-            _LOGGER.info(
-                "Consent outdated for %s — repair issue created", title
-            )
+            _LOGGER.info("Consent outdated for %s — repair issue created", title)
         else:
             ir.async_delete_issue(hass, DOMAIN, issue_id)
 

@@ -9,22 +9,20 @@ Consent views are authenticated and available after onboarding is complete.
 from __future__ import annotations
 
 import base64
+from datetime import UTC, datetime, timedelta
 import hmac
 import json
 import logging
-import subprocess
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import subprocess
 from typing import Any
 from urllib.parse import urlencode
 
 from aiohttp import web
 
 from homeassistant.auth.const import GROUP_ID_USER
-from homeassistant.auth.providers.homeassistant import (
-    HassAuthProvider,
-    InvalidUser,
-)
+from homeassistant.auth.providers.homeassistant import HassAuthProvider, InvalidUser
+from homeassistant.components import frontend
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -42,9 +40,14 @@ def _async_get_hass_provider(hass: HomeAssistant) -> HassAuthProvider:
             return prv
     raise RuntimeError("Home Assistant auth provider not found")
 
+
 # Load HTML templates once at import time
-_CONSENT_HTML = (Path(__file__).parent / "consent_page.html").read_text(encoding="utf-8")
-_PW_RESET_HTML = (Path(__file__).parent / "password_reset_page.html").read_text(encoding="utf-8")
+_CONSENT_HTML = (Path(__file__).parent / "consent_page.html").read_text(
+    encoding="utf-8"
+)
+_PW_RESET_HTML = (Path(__file__).parent / "password_reset_page.html").read_text(
+    encoding="utf-8"
+)
 
 
 def _get_store(hass: HomeAssistant) -> Store[dict[str, Any]]:
@@ -88,9 +91,7 @@ def _check_pin_verified(hass: HomeAssistant) -> web.Response | None:
     state = _get_state(hass)
     if state.get("pin_verified"):
         return None  # Already verified
-    return web.json_response(
-        {"error": "PIN verification required"}, status=403
-    )
+    return web.json_response({"error": "PIN verification required"}, status=403)
 
 
 class GAOnboardingPageView(HomeAssistantView):
@@ -154,12 +155,14 @@ class GAAdminBypassView(HomeAssistantView):
         state = base64.b64encode(
             json.dumps({"hassUrl": origin, "clientId": f"{origin}/"}).encode()
         ).decode()
-        params = urlencode({
-            "client_id": f"{origin}/",
-            "redirect_uri": f"{origin}/config?auth_callback=1",
-            "state": state,
-            "ga_bypass": "1",
-        })
+        params = urlencode(
+            {
+                "client_id": f"{origin}/",
+                "redirect_uri": f"{origin}/config?auth_callback=1",
+                "state": state,
+                "ga_bypass": "1",
+            }
+        )
         response = web.Response(
             status=302,
             headers={"location": f"/auth/authorize?{params}"},
@@ -200,7 +203,7 @@ class GAOnboardingStatusView(HomeAssistantView):
         locked_until = state.get("pin_locked_until")
         if locked_until:
             remaining = (
-                datetime.fromisoformat(locked_until) - datetime.now(timezone.utc)
+                datetime.fromisoformat(locked_until) - datetime.now(UTC)
             ).total_seconds()
             response["pin_retry_after"] = max(0, int(remaining))
 
@@ -295,6 +298,7 @@ class GAOnboardingEthernetView(HomeAssistantView):
         await async_record_consent(hass, store, state, "ethernet")
 
         if enable_ethernet:
+
             def _enable_ethernet() -> None:
                 subprocess.run(
                     ["ga-manage-ethernet", "enable"],
@@ -339,8 +343,6 @@ class GAOnboardingCompleteView(HomeAssistantView):
         await store.async_save(state)
 
         # Remove the sidebar panel (for app users)
-        from homeassistant.components import frontend
-
         frontend.async_remove_panel(
             hass, "greenautarky-setup-panel", warn_if_unknown=False
         )
@@ -375,7 +377,7 @@ class GAOnboardingCreateUserView(HomeAssistantView):
         name = body.get("name", "").strip()
         username = body.get("username", "").strip()
         password = body.get("password", "")
-        language = body.get("language", "de")
+        body.get("language", "de")
 
         if not name or not username or not password or not client_id:
             return self.json_message(
@@ -384,9 +386,7 @@ class GAOnboardingCreateUserView(HomeAssistantView):
             )
 
         # Create user in normal user group (not admin)
-        user = await hass.auth.async_create_user(
-            name, group_ids=[GROUP_ID_USER]
-        )
+        user = await hass.auth.async_create_user(name, group_ids=[GROUP_ID_USER])
 
         # Create credentials via homeassistant auth provider
         provider = _async_get_hass_provider(hass)
@@ -513,8 +513,7 @@ class GAPinVerifyView(HomeAssistantView):
         locked_until = state.get("pin_locked_until")
         if locked_until:
             remaining = (
-                datetime.fromisoformat(locked_until)
-                - datetime.now(timezone.utc)
+                datetime.fromisoformat(locked_until) - datetime.now(UTC)
             ).total_seconds()
             if remaining > 0:
                 return self.json(
@@ -558,13 +557,11 @@ class GAPinVerifyView(HomeAssistantView):
         delay = 0
         if attempts >= 2:
             delay = min(5 * (2 ** (attempts - 2)), PIN_MAX_DELAY)
-            lock_time = datetime.now(timezone.utc) + timedelta(seconds=delay)
+            lock_time = datetime.now(UTC) + timedelta(seconds=delay)
             state["pin_locked_until"] = lock_time.isoformat()
 
         await store.async_save(state)
-        _LOGGER.warning(
-            "Invalid PIN attempt %d (next retry in %ds)", attempts, delay
-        )
+        _LOGGER.warning("Invalid PIN attempt %d (next retry in %ds)", attempts, delay)
         return self.json(
             {
                 "status": "error",
@@ -588,7 +585,7 @@ def _check_pw_reset_rate_limit(
     locked_until = state.get("pw_reset_pin_locked_until")
     if locked_until:
         remaining = (
-            datetime.fromisoformat(locked_until) - datetime.now(timezone.utc)
+            datetime.fromisoformat(locked_until) - datetime.now(UTC)
         ).total_seconds()
         if remaining > 0:
             return web.json_response(
@@ -665,7 +662,7 @@ class GAPasswordResetUsersView(HomeAssistantView):
             delay = 0
             if attempts >= 2:
                 delay = min(5 * (2 ** (attempts - 2)), PIN_MAX_DELAY)
-                lock_time = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                lock_time = datetime.now(UTC) + timedelta(seconds=delay)
                 state["pw_reset_pin_locked_until"] = lock_time.isoformat()
             await store.async_save(state)
             _LOGGER.warning(
@@ -750,7 +747,7 @@ class GAPasswordResetView(HomeAssistantView):
             delay = 0
             if attempts >= 2:
                 delay = min(5 * (2 ** (attempts - 2)), PIN_MAX_DELAY)
-                lock_time = datetime.now(timezone.utc) + timedelta(seconds=delay)
+                lock_time = datetime.now(UTC) + timedelta(seconds=delay)
                 state["pw_reset_pin_locked_until"] = lock_time.isoformat()
             await store.async_save(state)
             _LOGGER.warning(
@@ -839,10 +836,12 @@ class GAConsentStatusView(HomeAssistantView):
         hass: HomeAssistant = request.app["hass"]
         state = _get_state(hass)
         outdated = get_outdated_consents(state)
-        return self.json({
-            "consents": state.get("consents", {}),
-            "outdated": list(outdated.keys()),
-        })
+        return self.json(
+            {
+                "consents": state.get("consents", {}),
+                "outdated": list(outdated.keys()),
+            }
+        )
 
 
 class GAConsentAcceptView(HomeAssistantView):
@@ -862,9 +861,7 @@ class GAConsentAcceptView(HomeAssistantView):
         consent_type = body.get("type", "")
 
         if not consent_type:
-            return web.json_response(
-                {"message": "Missing 'type' field"}, status=400
-            )
+            return web.json_response({"message": "Missing 'type' field"}, status=400)
 
         ok = await async_record_consent(hass, store, state, consent_type)
         if not ok:

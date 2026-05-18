@@ -5,17 +5,12 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from homeassistant.components.greenautarky_onboarding.consent import (
     async_check_and_create_issues,
     async_record_consent,
     get_outdated_consents,
 )
-from homeassistant.components.greenautarky_onboarding.const import (
-    CONSENT_TYPES,
-    DOMAIN,
-)
+from homeassistant.components.greenautarky_onboarding.const import CONSENT_TYPES, DOMAIN
 from homeassistant.core import HomeAssistant
 
 
@@ -69,9 +64,7 @@ class TestGetOutdatedConsents:
 class TestAsyncRecordConsent:
     """Tests for async_record_consent()."""
 
-    async def test_records_consent_and_clears_issue(
-        self, hass: HomeAssistant
-    ) -> None:
+    async def test_records_consent_and_clears_issue(self, hass: HomeAssistant) -> None:
         """Record consent, save to store, delete repair issue."""
         store = MagicMock()
         store.async_save = AsyncMock()
@@ -91,9 +84,7 @@ class TestAsyncRecordConsent:
             hass, DOMAIN, "consent_outdated_gdpr"
         )
 
-    async def test_unknown_type_returns_false(
-        self, hass: HomeAssistant
-    ) -> None:
+    async def test_unknown_type_returns_false(self, hass: HomeAssistant) -> None:
         """Unknown consent type → returns False, no state change."""
         store = MagicMock()
         store.async_save = AsyncMock()
@@ -120,7 +111,10 @@ class TestCheckAndCreateIssues:
 
         # Both gdpr and ethernet issues should be created (no consents recorded)
         assert mock_ir.async_create_issue.call_count == 2
-        keys = [c.kwargs["translation_key"] for c in mock_ir.async_create_issue.call_args_list]
+        keys = [
+            c.kwargs["translation_key"]
+            for c in mock_ir.async_create_issue.call_args_list
+        ]
         assert "consent_outdated_gdpr" in keys
         assert "consent_outdated_ethernet" in keys
         for c in mock_ir.async_create_issue.call_args_list:
