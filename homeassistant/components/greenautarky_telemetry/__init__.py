@@ -33,7 +33,7 @@ Migration rule: v1 values are preserved literally
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import voluptuous as vol
@@ -63,13 +63,13 @@ LEGACY_TIER1_KEY = "error_logs"
 LEGACY_TIER2_KEY = "metrics"
 
 DEFAULT_PREFERENCES: dict[str, bool] = {
-    TIER_1: True,    # Tier 1 default ON  — berechtigtes Interesse, opt-out
-    TIER_2: False,   # Tier 2 default OFF — Einwilligung, opt-in
+    TIER_1: True,  # Tier 1 default ON  — berechtigtes Interesse, opt-out
+    TIER_2: False,  # Tier 2 default OFF — Einwilligung, opt-in
 }
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _build_v2_record(
@@ -151,8 +151,12 @@ class TelemetryStore(Store[dict[str, Any]]):
             # and trigger a re-consent prompt.
             return _build_v2_record(
                 {
-                    TIER_1: bool(old_data.get(LEGACY_TIER1_KEY, DEFAULT_PREFERENCES[TIER_1])),
-                    TIER_2: bool(old_data.get(LEGACY_TIER2_KEY, DEFAULT_PREFERENCES[TIER_2])),
+                    TIER_1: bool(
+                        old_data.get(LEGACY_TIER1_KEY, DEFAULT_PREFERENCES[TIER_1])
+                    ),
+                    TIER_2: bool(
+                        old_data.get(LEGACY_TIER2_KEY, DEFAULT_PREFERENCES[TIER_2])
+                    ),
                 },
                 policy_version=1,
             )
@@ -195,9 +199,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 @callback
-@websocket_api.websocket_command(
-    {vol.Required("type"): "greenautarky_telemetry/get"}
-)
+@websocket_api.websocket_command({vol.Required("type"): "greenautarky_telemetry/get"})
 def websocket_get_preferences(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
