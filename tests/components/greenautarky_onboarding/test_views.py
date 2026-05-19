@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
+import base64
 from http import HTTPStatus
+import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from homeassistant.components.greenautarky_onboarding.const import DOMAIN
+from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
+from homeassistant.auth.providers.homeassistant import InvalidAuth
+from homeassistant.components.greenautarky_onboarding import _migrate_v1_to_v2
+from homeassistant.components.greenautarky_onboarding.const import DOMAIN, STORAGE_KEY
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
 from . import mock_storage
 
-from tests.common import register_auth_provider
+from tests.common import MockUser, register_auth_provider
 from tests.typing import ClientSessionGenerator
 
 
@@ -56,9 +62,7 @@ async def _setup_component(
     with patch(
         "homeassistant.components.greenautarky_onboarding._async_register_panel"
     ):
-        assert await async_setup_component(
-            hass, DOMAIN, {DOMAIN: {}}
-        )
+        assert await async_setup_component(hass, DOMAIN, {DOMAIN: {}})
     await hass.async_block_till_done()
 
 
@@ -268,7 +272,6 @@ class TestCreateUserView:
         created = [u for u in users if u.name == "Normal User"]
         assert len(created) == 1
         assert not created[0].is_admin
-
 
     async def test_create_user_with_email_as_username(
         self,
@@ -848,9 +851,6 @@ class TestStorageMigration:
         hass_storage: dict[str, Any],
     ) -> None:
         """v1 state with gdpr_accepted=True → adds consents.gdpr."""
-        from homeassistant.components.greenautarky_onboarding import (
-            _migrate_v1_to_v2,
-        )
 
         state = {
             "completed": True,
@@ -869,9 +869,6 @@ class TestStorageMigration:
         hass_storage: dict[str, Any],
     ) -> None:
         """v1 state with gdpr_accepted=False → adds empty consents."""
-        from homeassistant.components.greenautarky_onboarding import (
-            _migrate_v1_to_v2,
-        )
 
         state = {
             "completed": False,
@@ -888,9 +885,6 @@ class TestStorageMigration:
         hass_storage: dict[str, Any],
     ) -> None:
         """Component setup with v1 storage (no consents key) → migrates."""
-        from homeassistant.components.greenautarky_onboarding.const import (
-            STORAGE_KEY,
-        )
 
         # v1 storage: no consents key
         hass_storage[STORAGE_KEY] = {
@@ -908,9 +902,7 @@ class TestStorageMigration:
         with patch(
             "homeassistant.components.greenautarky_onboarding._async_register_panel"
         ):
-            assert await async_setup_component(
-                hass, DOMAIN, {DOMAIN: {}}
-            )
+            assert await async_setup_component(hass, DOMAIN, {DOMAIN: {}})
         await hass.async_block_till_done()
 
         state = hass.data[DOMAIN]["state"]
@@ -1017,7 +1009,6 @@ class TestAdminBypassRedirect:
         default_state: dict[str, Any],
     ) -> None:
         """redirect_uri must point to /config — /lovelace would auto-route to GA panel."""
-        from urllib.parse import parse_qs, urlparse
 
         await _setup_component(hass, hass_storage, default_state)
         client = await hass_client()
@@ -1041,7 +1032,6 @@ class TestAdminBypassRedirect:
         /config?code=… as its own OAuth callback and triggers a second
         round-trip — forcing the admin to log in twice.
         """
-        from urllib.parse import parse_qs, urlparse
 
         await _setup_component(hass, hass_storage, default_state)
         client = await hass_client()
@@ -1060,16 +1050,13 @@ class TestAdminBypassRedirect:
         hass_client: ClientSessionGenerator,
         default_state: dict[str, Any],
     ) -> None:
-        """state must be base64(JSON({hassUrl, clientId})) so the SPA can decode it.
+        """State must be base64(JSON({hassUrl, clientId})) so the SPA can decode it.
 
         The HA frontend SPA decodes state via atob() during the OAuth
         callback. Without a valid state the SPA crashes with
         "InvalidCharacterError: Failed to execute 'atob'", leaving the
         admin on a blank /config page.
         """
-        import base64
-        import json
-        from urllib.parse import parse_qs, urlparse
 
         await _setup_component(hass, hass_storage, default_state)
         client = await hass_client()
@@ -1091,7 +1078,6 @@ class TestAdminBypassRedirect:
         default_state: dict[str, Any],
     ) -> None:
         """Self-referential OAuth: client_id and redirect_uri use the request origin."""
-        from urllib.parse import parse_qs, urlparse
 
         await _setup_component(hass, hass_storage, default_state)
         client = await hass_client()
@@ -1245,13 +1231,11 @@ class TestResetView:
         default_state: dict[str, Any],
     ) -> None:
         """Test reset returns 403 for non-admin users."""
-        from homeassistant.auth.const import GROUP_ID_USER
 
         await _setup_component(hass, hass_storage, default_state)
 
         # Create a non-admin user and get their token
         user_group = await hass.auth.async_get_group(GROUP_ID_USER)
-        from tests.common import MockUser
 
         regular_user = MockUser(groups=[user_group]).add_to_hass(hass)
         refresh_token = await hass.auth.async_create_refresh_token(
@@ -1649,7 +1633,6 @@ class TestPasswordResetViews:
         tmp_path,
     ) -> None:
         """Test user list returns only GROUP_ID_USER, not admin."""
-        from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
 
         pin_file = tmp_path / "ga-onboarding-pin"
         pin_file.write_text("847293")
@@ -1704,8 +1687,6 @@ class TestPasswordResetViews:
         tmp_path,
     ) -> None:
         """Test password reset actually changes the password."""
-        from homeassistant.auth.const import GROUP_ID_USER
-        from homeassistant.auth.providers.homeassistant import InvalidAuth
 
         pin_file = tmp_path / "ga-onboarding-pin"
         pin_file.write_text("847293")
@@ -1852,7 +1833,6 @@ class TestPasswordResetViews:
         tmp_path,
     ) -> None:
         """Test reset rejects admin users."""
-        from homeassistant.auth.const import GROUP_ID_ADMIN
 
         pin_file = tmp_path / "ga-onboarding-pin"
         pin_file.write_text("847293")

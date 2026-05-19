@@ -1,7 +1,7 @@
 """Tests for the greenautarky_onboarding component."""
 
 from homeassistant.components.greenautarky_onboarding.const import (
-    DOMAIN,
+    DOMAIN as DOMAIN,
     STORAGE_KEY,
     STORAGE_VERSION,
 )

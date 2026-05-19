@@ -13,8 +13,8 @@ A mismatch causes build failures or unexpected runtime behavior.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
+import re
 
 import pytest
 
@@ -58,18 +58,14 @@ class TestVersionConsistency:
 
     def test_pyproject_version_format(self) -> None:
         """Version must follow YYYYMMDD.N format."""
-        assert re.match(
-            r"^\d{8}\.\d+$", self.version
-        ), f"Invalid version format: {self.version}"
+        assert re.match(r"^\d{8}\.\d+$", self.version), (
+            f"Invalid version format: {self.version}"
+        )
 
     def test_manifest_json_matches(self) -> None:
         """manifest.json requirement must match pyproject.toml."""
         manifest_path = (
-            CORE_ROOT
-            / "homeassistant"
-            / "components"
-            / "frontend"
-            / "manifest.json"
+            CORE_ROOT / "homeassistant" / "components" / "frontend" / "manifest.json"
         )
         content = json.loads(manifest_path.read_text())
         reqs = content.get("requirements", [])
@@ -92,18 +88,14 @@ class TestVersionConsistency:
 
     def test_requirements_all_matches(self) -> None:
         """requirements_all.txt must match pyproject.toml."""
-        version = _extract_version_from_file(
-            CORE_ROOT / "requirements_all.txt"
-        )
+        version = _extract_version_from_file(CORE_ROOT / "requirements_all.txt")
         assert version == self.version, (
             f"requirements_all.txt has {version}, expected {self.version}"
         )
 
     def test_requirements_test_all_matches(self) -> None:
         """requirements_test_all.txt must match pyproject.toml."""
-        version = _extract_version_from_file(
-            CORE_ROOT / "requirements_test_all.txt"
-        )
+        version = _extract_version_from_file(CORE_ROOT / "requirements_test_all.txt")
         assert version == self.version, (
             f"requirements_test_all.txt has {version}, expected {self.version}"
         )

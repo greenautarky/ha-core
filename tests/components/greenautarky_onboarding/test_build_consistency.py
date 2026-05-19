@@ -7,8 +7,8 @@ being served instead of the built Lit panel.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
+import re
 
 import pytest
 
@@ -144,11 +144,15 @@ class TestFrontendBuildPipeline:
 
     def test_webpack_entrypoint_exists(self) -> None:
         """The greenautarky-setup webpack entrypoint must exist."""
-        assert (FRONTEND_ROOT / "src" / "entrypoints" / "greenautarky-setup.ts").exists()
+        assert (
+            FRONTEND_ROOT / "src" / "entrypoints" / "greenautarky-setup.ts"
+        ).exists()
 
     def test_html_template_exists(self) -> None:
         """The greenautarky-setup HTML template must exist."""
-        assert (FRONTEND_ROOT / "src" / "html" / "greenautarky-setup.html.template").exists()
+        assert (
+            FRONTEND_ROOT / "src" / "html" / "greenautarky-setup.html.template"
+        ).exists()
 
     def test_html_template_loads_lit_panel(self) -> None:
         """The HTML template must load the Lit panel (not inline JS)."""
@@ -195,8 +199,6 @@ class TestFrontendBuildPipeline:
 
     def test_api_uses_create_user(self) -> None:
         """Frontend API layer must use create_user (not create_tenant)."""
-        api = (
-            FRONTEND_ROOT / "src" / "data" / "greenautarky_setup.ts"
-        ).read_text()
+        api = (FRONTEND_ROOT / "src" / "data" / "greenautarky_setup.ts").read_text()
         assert "create_user" in api
         assert "create_tenant" not in api

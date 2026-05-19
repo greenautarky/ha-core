@@ -77,11 +77,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     if state is None:
         state = {**DEFAULT_STATE, "steps_done": [], "consents": {}}
-    else:
-        # Migrate from v1 if needed
-        if "consents" not in state:
-            state = _migrate_v1_to_v2(state)
-            await store.async_save(state)
+    # Migrate from v1 if needed
+    elif "consents" not in state:
+        state = _migrate_v1_to_v2(state)
+        await store.async_save(state)
 
     hass.data[DOMAIN] = {"store": store, "state": state}
 
